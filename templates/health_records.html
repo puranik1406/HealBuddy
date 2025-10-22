@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Health Records - HealBuddy{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="fas fa-file-medical"></i> Health Records
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-folder"></i> Your Health Records
+                </h5>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                    <i class="fas fa-upload"></i> Upload New Record
+                </button>
+            </div>
+            <div class="card-body">
+                {% if records %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Description</th>
+                                    <th>Type</th>
+                                    <th>Uploaded</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in records %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ record.title }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="text-truncate d-inline-block" style="max-width: 200px;" 
+                                              title="{{ record.description }}">
+                                            {{ record.description[:50] }}{% if record.description|length > 50 %}...{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ record.file_type }}</span>
+                                    </td>
+                                    <td>
+                                        {{ record.uploaded_at.strftime('%Y-%m-%d %H:%M') }}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    onclick="viewRecord({{ record.id }})">
+                                                <i class="fas fa-eye"></i> View
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" 
+                                                    onclick="downloadRecord({{ record.id }})">
+                                                <i class="fas fa-download"></i> Download
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-file-medical fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No health records uploaded yet.</p>
+                        <p class="text-muted">Upload your medical documents to keep them organized and accessible.</p>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <i class="fas fa-upload"></i> Upload Your First Record
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> Health Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_profile') }}">
+                    <div class="mb-3">
+                        <label for="blood_group" class="form-label">Blood Group</label>
+                        <select class="form-select" id="blood_group" name="blood_group">
+                            <option value="">Select Blood Group</option>
+                            <option value="A+" {% if current_user.blood_group == 'A+' %}selected{% endif %}>A+</option>
+                            <option value="A-" {% if current_user.blood_group == 'A-' %}selected{% endif %}>A-</option>
+                            <option value="B+" {% if current_user.blood_group == 'B+' %}selected{% endif %}>B+</option>
+                            <option value="B-" {% if current_user.blood_group == 'B-' %}selected{% endif %}>B-</option>
+                            <option value="AB+" {% if current_user.blood_group == 'AB+' %}selected{% endif %}>AB+</option>
+                            <option value="AB-" {% if current_user.blood_group == 'AB-' %}selected{% endif %}>AB-</option>
+                            <option value="O+" {% if current_user.blood_group == 'O+' %}selected{% endif %}>O+</option>
+                            <option value="O-" {% if current_user.blood_group == 'O-' %}selected{% endif %}>O-</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="allergies" class="form-label">Allergies</label>
+                        <textarea class="form-control" id="allergies" name="allergies" rows="3" 
+                                  placeholder="List any allergies you have...">{{ current_user.allergies or '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="medications" class="form-label">Current Medications</label>
+                        <textarea class="form-control" id="medications" name="medications" rows="3" 
+                                  placeholder="List your current medications...">{{ current_user.medications or '' }}</textarea>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-save"></i> Update Information
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-pie"></i> Record Statistics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-primary">{{ records|length }}</h4>
+                        <small class="text-muted">Total Records</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-success">
+                            {{ records|selectattr('file_type', 'containing', 'pdf')|list|length }}
+                        </h4>
+                        <small class="text-muted">PDF Files</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-upload"></i> Upload Health Record
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="recordTitle" class="form-label">Record Title</label>
+                        <input type="text" class="form-control" id="recordTitle" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="recordDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="recordDescription" name="description" rows="3" 
+                                  placeholder="Brief description of this health record..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="recordFile" class="form-label">File</label>
+                        <input type="file" class="form-control" id="recordFile" name="file" required 
+                               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt">
+                        <div class="form-text">Supported formats: PDF, Images, Word documents, Text files</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Upload
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    fetch('/upload_record', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Record uploaded successfully!');
+            location.reload();
+        } else {
+            alert('Error uploading record: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error uploading record');
+    });
+});
+
+function viewRecord(recordId) {
+    // This would open a modal or new page to view the record
+    alert('View record functionality would be implemented here');
+}
+
+function downloadRecord(recordId) {
+    // This would trigger a download of the record
+    alert('Download record functionality would be implemented here');
+}
+</script>
+{% endblock %}
+

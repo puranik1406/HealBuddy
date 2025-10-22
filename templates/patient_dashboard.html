@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Dashboard - HealBuddy{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="fas fa-tachometer-alt"></i> Patient Dashboard
+        </h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Quick Actions</h4>
+                        <p class="card-text">Access HealBuddy's features</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-bolt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Health Records</h4>
+                        <p class="card-text">Manage your medical files</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-file-medical fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">Emergency</h4>
+                        <p class="card-text">Alert for urgent cases</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-history"></i> Recent Consultations
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if consultations %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Symptoms</th>
+                                    <th>Pain Level</th>
+                                    <th>Status</th>
+                                    <th>Emergency</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for consultation in consultations %}
+                                <tr>
+                                    <td>{{ consultation.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <span class="text-truncate d-inline-block" style="max-width: 200px;" 
+                                              title="{{ consultation.symptoms }}">
+                                            {{ consultation.symptoms[:50] }}{% if consultation.symptoms|length > 50 %}...{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if consultation.pain_level <= 3 %}success{% elif consultation.pain_level <= 6 %}warning{% else %}danger{% endif %}">
+                                            {{ consultation.pain_level }}/10
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if consultation.status == 'completed' %}success{% elif consultation.status == 'reviewed' %}info{% else %}secondary{% endif %}">
+                                            {{ consultation.status.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if consultation.is_emergency %}
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-exclamation-triangle"></i> Emergency
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-success">Normal</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No consultations yet. Start by talking to HealBuddy!</p>
+                        <a href="{{ url_for('symptom_input') }}" class="btn btn-primary">
+                            <i class="fas fa-microphone"></i> Talk to HealBuddy
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-user"></i> Profile Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Username:</strong> {{ current_user.username }}
+                </div>
+                <div class="mb-3">
+                    <strong>Email:</strong> {{ current_user.email }}
+                </div>
+                {% if current_user.blood_group %}
+                <div class="mb-3">
+                    <strong>Blood Group:</strong> {{ current_user.blood_group }}
+                </div>
+                {% endif %}
+                {% if current_user.allergies %}
+                <div class="mb-3">
+                    <strong>Allergies:</strong> {{ current_user.allergies }}
+                </div>
+                {% endif %}
+                {% if current_user.medications %}
+                <div class="mb-3">
+                    <strong>Medications:</strong> {{ current_user.medications }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line"></i> Quick Stats
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-primary">{{ consultations|length }}</h4>
+                        <small class="text-muted">Total Consultations</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-warning">
+                            {{ consultations|selectattr('is_emergency')|list|length }}
+                        </h4>
+                        <small class="text-muted">Emergency Cases</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">Quick Actions</h5>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('symptom_input') }}" class="btn btn-primary">
+                        <i class="fas fa-microphone"></i> Talk to HealBuddy
+                    </a>
+                    <a href="{{ url_for('health_records') }}" class="btn btn-success">
+                        <i class="fas fa-file-medical"></i> Health Records
+                    </a>
+                    <a href="{{ url_for('emergency_alert') }}" class="btn btn-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Emergency Alert
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

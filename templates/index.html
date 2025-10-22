@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}HealBuddy - AI Health Assistant{% endblock %}
+
+{% block content %}
+<div class="hero-section text-center py-5">
+    <div class="container">
+        <h1 class="display-4 mb-4">
+            <i class="fas fa-heartbeat text-primary"></i> HealBuddy
+        </h1>
+        <p class="lead mb-4">Your AI-powered health assistant for symptom analysis and medical guidance</p>
+        
+        {% if not current_user.is_authenticated %}
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-body">
+                            <h3 class="card-title">Get Started</h3>
+                            <p class="card-text">Choose your role to access HealBuddy's features</p>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100 border-primary">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-user-injured fa-3x text-primary mb-3"></i>
+                                            <h5 class="card-title">Patient</h5>
+                                            <p class="card-text">Get AI-powered symptom analysis and health guidance</p>
+                                            <a href="{{ url_for('register') }}" class="btn btn-primary">Register as Patient</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100 border-success">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-user-md fa-3x text-success mb-3"></i>
+                                            <h5 class="card-title">Doctor</h5>
+                                            <p class="card-text">Access patient consultations and AI-generated summaries</p>
+                                            <a href="{{ url_for('register') }}" class="btn btn-success">Register as Doctor</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100 border-warning">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-hospital fa-3x text-warning mb-3"></i>
+                                            <h5 class="card-title">Hospital</h5>
+                                            <p class="card-text">Monitor emergency alerts and patient information</p>
+                                            <a href="{{ url_for('register') }}" class="btn btn-warning">Register as Hospital</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h3 class="card-title">Welcome back, {{ current_user.username }}!</h3>
+                            <p class="card-text">Ready to use HealBuddy's AI-powered health features?</p>
+                            {% if current_user.user_type == 'patient' %}
+                                <a href="{{ url_for('symptom_input') }}" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-microphone"></i> Talk to HealBuddy
+                                </a>
+                            {% endif %}
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary btn-lg ms-2">
+                                <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="features-section py-5 bg-light">
+    <div class="container">
+        <h2 class="text-center mb-5">Key Features</h2>
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-microphone fa-3x text-primary mb-3"></i>
+                        <h5 class="card-title">Voice Interaction</h5>
+                        <p class="card-text">Speak your symptoms directly to HealBuddy using advanced speech recognition technology.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-brain fa-3x text-success mb-3"></i>
+                        <h5 class="card-title">AI Analysis</h5>
+                        <p class="card-text">Get intelligent symptom analysis and personalized health recommendations powered by GPT-4o-mini.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-file-medical fa-3x text-info mb-3"></i>
+                        <h5 class="card-title">Health Records</h5>
+                        <p class="card-text">Securely store and manage your health records, medications, and medical history.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-user-md fa-3x text-warning mb-3"></i>
+                        <h5 class="card-title">Doctor Dashboard</h5>
+                        <p class="card-text">Healthcare professionals can access AI-generated case summaries and patient consultations.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                        <h5 class="card-title">Emergency Alerts</h5>
+                        <p class="card-text">Automatic emergency detection and hospital notification for critical cases.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-volume-up fa-3x text-secondary mb-3"></i>
+                        <h5 class="card-title">Text-to-Speech</h5>
+                        <p class="card-text">Listen to AI responses with natural-sounding text-to-speech technology.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

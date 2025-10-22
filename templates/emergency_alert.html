@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Emergency Alert - HealBuddy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h3 class="text-center mb-0">
+                    <i class="fas fa-exclamation-triangle"></i> Emergency Alert System
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger" role="alert">
+                    <h4 class="alert-heading">
+                        <i class="fas fa-ambulance"></i> Medical Emergency
+                    </h4>
+                    <p>This system is designed for genuine medical emergencies only. Use this feature when you are experiencing:</p>
+                    <ul>
+                        <li>Severe chest pain or difficulty breathing</li>
+                        <li>Loss of consciousness</li>
+                        <li>Severe bleeding</li>
+                        <li>Signs of stroke or heart attack</li>
+                        <li>Any life-threatening condition</li>
+                    </ul>
+                    <hr>
+                    <p class="mb-0">
+                        <strong>If this is a true emergency, click the button below to alert hospitals and emergency services.</strong>
+                    </p>
+                </div>
+
+                <div class="text-center">
+                    <button id="emergencyTriggerBtn" class="btn btn-danger btn-lg">
+                        <i class="fas fa-ambulance"></i> TRIGGER EMERGENCY ALERT
+                    </button>
+                </div>
+
+                <div class="mt-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-info-circle"></i> What happens when you trigger an emergency alert?
+                            </h5>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> Your location and medical information are sent to nearby hospitals</li>
+                                <li><i class="fas fa-check text-success"></i> Emergency services are notified immediately</li>
+                                <li><i class="fas fa-check text-success"></i> Your emergency contact (if provided) is notified</li>
+                                <li><i class="fas fa-check text-success"></i> Your medical history and current symptoms are shared with responders</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-phone"></i> Alternative Emergency Contacts
+                            </h5>
+                            <p>If you cannot use this system, please call emergency services directly:</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="d-grid">
+                                        <a href="tel:911" class="btn btn-outline-danger">
+                                            <i class="fas fa-phone"></i> Call 911 (US)
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-grid">
+                                        <a href="tel:112" class="btn btn-outline-danger">
+                                            <i class="fas fa-phone"></i> Call 112 (EU)
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 text-center">
+                    <a href="{{ url_for('symptom_input') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left"></i> Back to Symptom Input
+                    </a>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmEmergencyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Confirm Emergency Alert
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger" role="alert">
+                    <h6 class="alert-heading">Are you sure this is a medical emergency?</h6>
+                    <p>This action will:</p>
+                    <ul>
+                        <li>Alert hospitals and emergency services</li>
+                        <li>Share your medical information with responders</li>
+                        <li>Create a permanent record of this emergency</li>
+                    </ul>
+                    <p><strong>Only proceed if you are experiencing a genuine medical emergency.</strong></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmEmergencyBtn">
+                    <i class="fas fa-ambulance"></i> Yes, Trigger Emergency Alert
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('emergencyTriggerBtn').addEventListener('click', function() {
+    const modal = new bootstrap.Modal(document.getElementById('confirmEmergencyModal'));
+    modal.show();
+});
+
+document.getElementById('confirmEmergencyBtn').addEventListener('click', function() {
+    // Show loading state
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending Alert...';
+    this.disabled = true;
+    
+    fetch('/trigger_emergency', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Emergency alert sent successfully! Help is on the way.');
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('confirmEmergencyModal'));
+            modal.hide();
+            // Redirect to dashboard
+            window.location.href = '/dashboard';
+        } else {
+            alert('Error sending emergency alert: ' + data.error);
+            // Reset button
+            this.innerHTML = '<i class="fas fa-ambulance"></i> Yes, Trigger Emergency Alert';
+            this.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error sending emergency alert. Please try again or call emergency services directly.');
+        // Reset button
+        this.innerHTML = '<i class="fas fa-ambulance"></i> Yes, Trigger Emergency Alert';
+        this.disabled = false;
+    });
+});
+</script>
+{% endblock %}
+

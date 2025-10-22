@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Hospital Dashboard - HealBuddy{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="fas fa-hospital"></i> Hospital Dashboard
+        </h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h4 class="card-title">{{ emergency_cases|length }}</h4>
+                <p class="card-text">Emergency Alerts</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h4 class="card-title">{{ emergency_cases|selectattr('status', 'equalto', 'pending')|list|length }}</h4>
+                <p class="card-text">Pending Response</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h4 class="card-title">{{ emergency_cases|selectattr('status', 'equalto', 'completed')|list|length }}</h4>
+                <p class="card-text">Resolved</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle"></i> Emergency Cases
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if emergency_cases %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Alert Time</th>
+                                    <th>Patient</th>
+                                    <th>Contact</th>
+                                    <th>Symptoms</th>
+                                    <th>Pain Level</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for case in emergency_cases %}
+                                <tr class="{% if case.status == 'pending' %}table-warning{% endif %}">
+                                    <td>
+                                        <strong>{{ case.created_at.strftime('%Y-%m-%d') }}</strong><br>
+                                        <small class="text-muted">{{ case.created_at.strftime('%H:%M:%S') }}</small>
+                                    </td>
+                                    <td>
+                                        <strong>{{ case.patient.username }}</strong><br>
+                                        <small class="text-muted">ID: {{ case.patient.id }}</small>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <i class="fas fa-envelope"></i> {{ case.patient.email }}
+                                        </div>
+                                        {% if case.patient.contact_number %}
+                                        <div>
+                                            <i class="fas fa-phone"></i> {{ case.patient.contact_number }}
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="text-truncate d-inline-block" style="max-width: 200px;" 
+                                              title="{{ case.symptoms }}">
+                                            {{ case.symptoms[:50] }}{% if case.symptoms|length > 50 %}...{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-danger fs-6">
+                                            {{ case.pain_level }}/10
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if case.status == 'completed' %}success{% elif case.status == 'reviewed' %}info{% else %}warning{% endif %}">
+                                            {{ case.status.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-info" 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#caseModal{{ case.id }}">
+                                                <i class="fas fa-eye"></i> View
+                                            </button>
+                                            <button class="btn btn-sm btn-success" 
+                                                    onclick="updateCaseStatus({{ case.id }}, 'reviewed')">
+                                                <i class="fas fa-check"></i> Review
+                                            </button>
+                                            <button class="btn btn-sm btn-primary" 
+                                                    onclick="updateCaseStatus({{ case.id }}, 'completed')">
+                                                <i class="fas fa-check-double"></i> Complete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-heart fa-3x text-success mb-3"></i>
+                        <p class="text-muted">No emergency cases at this time.</p>
+                        <small class="text-muted">All patients are safe!</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Case Detail Modals -->
+{% for case in emergency_cases %}
+<div class="modal fade" id="caseModal{{ case.id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Emergency Case Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-user"></i> Patient Information</h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <p><strong>Name:</strong> {{ case.patient.username }}</p>
+                                <p><strong>Email:</strong> {{ case.patient.email }}</p>
+                                {% if case.patient.contact_number %}
+                                <p><strong>Phone:</strong> {{ case.patient.contact_number }}</p>
+                                {% endif %}
+                                {% if case.patient.blood_group %}
+                                <p><strong>Blood Group:</strong> {{ case.patient.blood_group }}</p>
+                                {% endif %}
+                                {% if case.patient.allergies %}
+                                <p><strong>Allergies:</strong> {{ case.patient.allergies }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-chart-line"></i> Medical Information</h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <p><strong>Alert Time:</strong> {{ case.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                                <p><strong>Pain Level:</strong> 
+                                    <span class="badge bg-danger">{{ case.pain_level }}/10</span>
+                                </p>
+                                <p><strong>Duration:</strong> {{ case.duration }}</p>
+                                <p><strong>Status:</strong> 
+                                    <span class="badge bg-{% if case.status == 'completed' %}success{% elif case.status == 'reviewed' %}info{% else %}warning{% endif %}">
+                                        {{ case.status.title() }}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <h6><i class="fas fa-stethoscope"></i> Symptoms & AI Analysis</h6>
+                    <div class="card">
+                        <div class="card-body">
+                            <p><strong>Symptoms:</strong></p>
+                            <p class="text-muted">{{ case.symptoms }}</p>
+                            
+                            <p><strong>AI Recommendations:</strong></p>
+                            <p class="text-muted">{{ case.ai_response }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success" onclick="updateCaseStatus({{ case.id }}, 'reviewed')">
+                    <i class="fas fa-check"></i> Mark as Reviewed
+                </button>
+                <button type="button" class="btn btn-primary" onclick="updateCaseStatus({{ case.id }}, 'completed')">
+                    <i class="fas fa-check-double"></i> Mark as Completed
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateCaseStatus(caseId, status) {
+    // This would typically make an AJAX call to update the status
+    // For now, we'll just show an alert
+    alert(`Case status updated to: ${status}`);
+    // In a real implementation, you would:
+    // fetch('/update_case_status', {
+    //     method: 'POST',
+    //     headers: {'Content-Type': 'application/json'},
+    //     body: JSON.stringify({case_id: caseId, status: status})
+    // });
+}
+</script>
+{% endblock %}
+

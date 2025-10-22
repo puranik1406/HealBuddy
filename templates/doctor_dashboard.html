@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Doctor Dashboard - HealBuddy{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="fas fa-user-md"></i> Doctor Dashboard
+        </h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h4 class="card-title">{{ consultations|length }}</h4>
+                <p class="card-text">Total Cases</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h4 class="card-title">{{ consultations|selectattr('status', 'equalto', 'pending')|list|length }}</h4>
+                <p class="card-text">Pending Review</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h4 class="card-title">{{ consultations|selectattr('status', 'equalto', 'completed')|list|length }}</h4>
+                <p class="card-text">Completed</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h4 class="card-title">{{ consultations|selectattr('is_emergency')|list|length }}</h4>
+                <p class="card-text">Emergency Cases</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-clipboard-list"></i> Patient Consultations
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if consultations %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Patient</th>
+                                    <th>Symptoms</th>
+                                    <th>Pain Level</th>
+                                    <th>AI Analysis</th>
+                                    <th>Status</th>
+                                    <th>Emergency</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for consultation in consultations %}
+                                <tr>
+                                    <td>{{ consultation.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <strong>{{ consultation.patient.username }}</strong><br>
+                                        <small class="text-muted">{{ consultation.patient.email }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="text-truncate d-inline-block" style="max-width: 200px;" 
+                                              title="{{ consultation.symptoms }}">
+                                            {{ consultation.symptoms[:50] }}{% if consultation.symptoms|length > 50 %}...{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if consultation.pain_level <= 3 %}success{% elif consultation.pain_level <= 6 %}warning{% else %}danger{% endif %}">
+                                            {{ consultation.pain_level }}/10
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-info" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#analysisModal{{ consultation.id }}">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if consultation.status == 'completed' %}success{% elif consultation.status == 'reviewed' %}info{% else %}secondary{% endif %}">
+                                            {{ consultation.status.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if consultation.is_emergency %}
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-exclamation-triangle"></i> Emergency
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-success">Normal</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-success" 
+                                                    onclick="updateStatus({{ consultation.id }}, 'reviewed')">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-primary" 
+                                                    onclick="updateStatus({{ consultation.id }}, 'completed')">
+                                                <i class="fas fa-check-double"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No consultations assigned to you yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Modals -->
+{% for consultation in consultations %}
+<div class="modal fade" id="analysisModal{{ consultation.id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">AI Analysis - {{ consultation.patient.username }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Symptoms:</h6>
+                        <p class="text-muted">{{ consultation.symptoms }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Duration:</h6>
+                        <p class="text-muted">{{ consultation.duration }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Pain Level:</h6>
+                        <div class="progress mb-2">
+                            <div class="progress-bar bg-{% if consultation.pain_level <= 3 %}success{% elif consultation.pain_level <= 6 %}warning{% else %}danger{% endif %}" 
+                                 role="progressbar" style="width: {{ consultation.pain_level * 10 }}%">
+                                {{ consultation.pain_level }}/10
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Emergency Status:</h6>
+                        <span class="badge bg-{% if consultation.is_emergency %}danger{% else %}success{% endif %}">
+                            {% if consultation.is_emergency %}Emergency{% else %}Normal{% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>AI Recommendations:</h6>
+                    <p class="text-muted">{{ consultation.ai_response }}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateStatus(consultationId, status) {
+    // This would typically make an AJAX call to update the status
+    // For now, we'll just show an alert
+    alert(`Status updated to: ${status}`);
+    // In a real implementation, you would:
+    // fetch('/update_consultation_status', {
+    //     method: 'POST',
+    //     headers: {'Content-Type': 'application/json'},
+    //     body: JSON.stringify({consultation_id: consultationId, status: status})
+    // });
+}
+</script>
+{% endblock %}
