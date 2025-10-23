@@ -24,7 +24,7 @@
                                             <i class="fas fa-user-injured fa-3x text-primary mb-3"></i>
                                             <h5 class="card-title">Patient</h5>
                                             <p class="card-text">Get AI-powered symptom analysis and health guidance</p>
-                                            <a href="{{ url_for('register') }}" class="btn btn-primary">Register as Patient</a>
+                                            <a href="{{ url_for('register', type='patient') }}" class="btn btn-primary">Register as Patient</a>
                                         </div>
                                     </div>
                                 </div>
@@ -34,7 +34,7 @@
                                             <i class="fas fa-user-md fa-3x text-success mb-3"></i>
                                             <h5 class="card-title">Doctor</h5>
                                             <p class="card-text">Access patient consultations and AI-generated summaries</p>
-                                            <a href="{{ url_for('register') }}" class="btn btn-success">Register as Doctor</a>
+                                            <a href="{{ url_for('register', type='doctor') }}" class="btn btn-success">Register as Doctor</a>
                                         </div>
                                     </div>
                                 </div>
@@ -44,7 +44,7 @@
                                             <i class="fas fa-hospital fa-3x text-warning mb-3"></i>
                                             <h5 class="card-title">Hospital</h5>
                                             <p class="card-text">Monitor emergency alerts and patient information</p>
-                                            <a href="{{ url_for('register') }}" class="btn btn-warning">Register as Hospital</a>
+                                            <a href="{{ url_for('register', type='hospital') }}" class="btn btn-warning">Register as Hospital</a>
                                         </div>
                                     </div>
                                 </div>

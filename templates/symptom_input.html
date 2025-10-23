@@ -50,6 +50,16 @@
                             <textarea class="form-control" id="symptomsText" rows="4" 
                                 placeholder="Please describe your symptoms in detail..."></textarea>
                         </div>
+                        <div class="mb-3">
+                            <label for="severityRange" class="form-label">How severe are your symptoms? (1-10)</label>
+                            <div class="d-flex align-items-center">
+                                <input type="range" class="form-range flex-grow-1" id="severityRange" min="1" max="10" value="5">
+                                <span id="severityValue" class="ms-2 badge bg-warning">5</span>
+                            </div>
+                            <small class="text-muted">
+                                1: Very mild - 5: Moderate - 10: Extremely severe
+                            </small>
+                        </div>
                         <div class="text-center">
                             <button id="submitTextBtn" class="btn btn-success">
                                 <i class="fas fa-paper-plane"></i> Submit Symptoms
@@ -72,32 +82,62 @@
                         </div>
                         
                         <div id="analysisResult">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6>Symptoms:</h6>
-                                    <p id="symptomsResult"></p>
+                            <!-- Initial Analysis -->
+                            <div class="mb-4">
+                                <div class="alert alert-info">
+                                    <h6 class="mb-2">Urgency Level: <span id="urgencyBadge" class="badge bg-warning">MEDIUM</span></h6>
                                 </div>
-                                <div class="col-md-6">
-                                    <h6>Duration:</h6>
-                                    <p id="durationResult"></p>
+                                <h6>Identified Symptoms:</h6>
+                                <div id="symptomsSeverityContainer">
+                                    <!-- Symptom severity sliders will be added here dynamically -->
+                                </div>
+                                <div class="text-center mt-3">
+                                    <button id="updateSeverityBtn" class="btn btn-primary" style="display: none;">
+                                        <i class="fas fa-sync"></i> Update Analysis
+                                    </button>
                                 </div>
                             </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6>Pain Level:</h6>
-                                    <div class="progress mb-2">
-                                        <div id="painLevelBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+
+                            <!-- Detailed Analysis -->
+                            <div id="detailedAnalysis" style="display: none;">
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Duration:</h6>
+                                        <p id="durationResult"></p>
+                                        
+                                        <h6 class="card-title mt-3">Overall Severity:</h6>
+                                        <div class="progress mb-2">
+                                            <div id="painLevelBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                        <p id="painLevelText"></p>
+                                        
+                                        <h6 class="card-title mt-3">Assessment:</h6>
+                                        <p id="assessmentResult"></p>
+                                        
+                                        <h6 class="card-title mt-3">Possible Conditions:</h6>
+                                        <ul id="conditionsList" class="list-group"></ul>
                                     </div>
-                                    <p id="painLevelText"></p>
                                 </div>
-                                <div class="col-md-6">
-                                    <h6>Urgency:</h6>
-                                    <span id="urgencyBadge" class="badge"></span>
+
+                                <div class="card mb-3">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Recommended Action</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="recommendationOptions">
+                                            <!-- Options will be added here based on severity -->
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="mt-3">
-                                <h6>Recommendations:</h6>
-                                <p id="recommendationsResult"></p>
+
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Additional Recommendations</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <p id="recommendationsResult"></p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

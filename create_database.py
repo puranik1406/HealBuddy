@@ -25,3 +25,5 @@ if __name__ == "__main__":
     create_fresh_database()
     print("\n🎉 Database creation complete!")
     print("You can now start the Flask app and register new users.")
+
+

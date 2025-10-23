@@ -1,13 +1,13 @@
 # HealBuddy - AI-Powered Health Assistant
 
-HealBuddy is a comprehensive full-stack web application that provides AI-powered health assistance through voice interaction, symptom analysis, and medical record management. Built with Flask and integrated with OpenAI's advanced AI models.
+HealBuddy is a comprehensive full-stack web application that provides AI-powered health assistance through voice interaction, symptom analysis, and medical record management. Built with Flask and integrated with Google's Gemini AI.
 
 ## 🚀 Features
 
 ### Core Functionalities
-- **Voice Interaction**: Speak symptoms directly to HealBuddy using OpenAI Whisper
-- **AI Symptom Analysis**: Intelligent analysis using GPT-4o-mini for structured medical insights
-- **Text-to-Speech**: Natural voice responses using OpenAI TTS
+- **Voice Interaction**: Speak symptoms directly to HealBuddy using Google Speech Recognition
+- **AI Symptom Analysis**: Intelligent analysis using Gemini 1.5 Flash for structured medical insights
+- **Text-to-Speech**: Natural voice responses using gTTS
 - **Health Records Management**: Secure storage and organization of medical documents
 - **Emergency Alert System**: Automatic emergency detection and hospital notification
 - **Multi-User Support**: Separate dashboards for patients, doctors, and hospitals
@@ -31,10 +31,9 @@ HealBuddy is a comprehensive full-stack web application that provides AI-powered
 - **Font Awesome**: Icons
 
 ### AI Integration
-- **OpenAI Whisper**: Speech-to-text transcription
-- **OpenAI GPT-4o-mini**: Symptom analysis and recommendations
-- **OpenAI TTS**: Text-to-speech responses
-- **gTTS**: Alternative text-to-speech (fallback)
+- **Google Speech Recognition**: Speech-to-text transcription
+- **Gemini 1.5 Flash**: Symptom analysis and recommendations
+- **gTTS**: Text-to-speech responses
 
 ## 📁 Project Structure
 
@@ -68,7 +67,7 @@ HealBuddy/
 
 ### Prerequisites
 - Python 3.8 or higher
-- OpenAI API key
+- Google Gemini API key
 - Git (optional)
 
 ### Step 1: Clone the Repository
@@ -102,8 +101,8 @@ pip install -r requirements.txt
 
 2. Edit `.env` file and add your API keys:
    ```env
-   # OpenAI API Configuration
-   OPENAI_API_KEY=your_openai_api_key_here
+   # Gemini AI API Configuration
+   GEMINI_API_KEY=your_gemini_api_key_here
    
    # Flask Configuration
    FLASK_SECRET_KEY=your_secret_key_here
@@ -122,11 +121,11 @@ The application will be available at `http://localhost:5000`
 
 ## 🔧 Configuration
 
-### OpenAI API Setup
-1. Visit [OpenAI Platform](https://platform.openai.com/)
-2. Create an account and generate an API key
-3. Add the key to your `.env` file
-4. Ensure you have sufficient credits for API usage
+### Gemini API Setup
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Create or sign in to your Google account
+3. Generate an API key
+4. Add the key to your `.env` file
 
 ### Database Configuration
 - Default: SQLite database (`healbuddy.db`)
@@ -181,8 +180,8 @@ The application will be available at `http://localhost:5000`
 
 ### Symptom Analysis Flow
 1. **Voice Input**: Audio captured via microphone
-2. **Transcription**: OpenAI Whisper converts speech to text
-3. **Analysis**: GPT-4o-mini analyzes symptoms and provides structured output
+2. **Transcription**: Google Speech Recognition converts speech to text
+3. **Analysis**: Gemini 1.5 Flash analyzes symptoms and provides structured output
 4. **Response**: Text-to-speech conversion for audio feedback
 
 ### Pain Level Classification
@@ -204,9 +203,9 @@ The application will be available at `http://localhost:5000`
    - Ensure browser permissions are granted
    - Use HTTPS in production (required for microphone access)
 
-2. **OpenAI API Errors**
+2. **Gemini API Errors**
    - Verify API key is correct
-   - Check API credit balance
+   - Check API quota limits
    - Ensure internet connection
 
 3. **File Upload Issues**

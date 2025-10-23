@@ -55,14 +55,14 @@
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
-                                            <button class="btn btn-sm btn-outline-primary" 
-                                                    onclick="viewRecord({{ record.id }})">
+                                            <a href="{{ url_for('view_health_record', record_id=record.id) }}" 
+                                               class="btn btn-sm btn-outline-primary" target="_blank">
                                                 <i class="fas fa-eye"></i> View
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-success" 
-                                                    onclick="downloadRecord({{ record.id }})">
+                                            </a>
+                                            <a href="{{ url_for('download_health_record', record_id=record.id) }}" 
+                                               class="btn btn-sm btn-outline-success">
                                                 <i class="fas fa-download"></i> Download
-                                            </button>
+                                            </a>
                                         </div>
                                     </td>
                                 </tr>
@@ -92,7 +92,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('update_profile') }}">
+                <form method="POST" action="{{ url_for('update_patient_profile') }}">
                     <div class="mb-3">
                         <label for="blood_group" class="form-label">Blood Group</label>
                         <select class="form-select" id="blood_group" name="blood_group">
@@ -115,7 +115,13 @@
                     <div class="mb-3">
                         <label for="medications" class="form-label">Current Medications</label>
                         <textarea class="form-control" id="medications" name="medications" rows="3" 
-                                  placeholder="List your current medications...">{{ current_user.medications or '' }}</textarea>
+                                  placeholder="List your current medications...">{{ current_user.current_medications or '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="preferred_hospitals" class="form-label">Preferred Hospitals for Emergencies</label>
+                        <textarea class="form-control" id="preferred_hospitals" name="preferred_hospitals" rows="2" 
+                                  placeholder="Enter hospital names separated by commas (e.g., Apollo Hospital, Max Hospital)">{% if current_user.preferred_hospitals %}{{ current_user.preferred_hospitals|from_json|join(', ') }}{% elif current_user.preferred_hospital %}{{ current_user.preferred_hospital }}{% endif %}</textarea>
+                        <small class="text-muted">Emergency alerts will be sent to these hospitals and all nearby ones</small>
                     </div>
                     <div class="d-grid">
                         <button type="submit" class="btn btn-success">
@@ -140,7 +146,13 @@
                     </div>
                     <div class="col-6">
                         <h4 class="text-success">
-                            {{ records|selectattr('file_type', 'containing', 'pdf')|list|length }}
+                            {% set pdf_count = namespace(value=0) %}
+                            {% for record in records %}
+                                {% if record.file_type and 'pdf' in record.file_type.lower() %}
+                                    {% set pdf_count.value = pdf_count.value + 1 %}
+                                {% endif %}
+                            {% endfor %}
+                            {{ pdf_count.value }}
                         </h4>
                         <small class="text-muted">PDF Files</small>
                     </div>
@@ -216,15 +228,7 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
     });
 });
 
-function viewRecord(recordId) {
-    // This would open a modal or new page to view the record
-    alert('View record functionality would be implemented here');
-}
-
-function downloadRecord(recordId) {
-    // This would trigger a download of the record
-    alert('Download record functionality would be implemented here');
-}
+// View and download functionality now uses direct links
 </script>
 {% endblock %}
 

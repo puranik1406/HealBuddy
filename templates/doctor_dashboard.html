@@ -5,9 +5,12 @@
 {% block content %}
 <div class="row">
     <div class="col-md-12">
-        <h2 class="mb-4">
-            <i class="fas fa-user-md"></i> Doctor Dashboard
-        </h2>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-user-md"></i> Doctor Dashboard</h2>
+            <a href="{{ url_for('doctor_schedule') }}" class="btn btn-primary">
+                <i class="fas fa-calendar-alt"></i> View My Schedule
+            </a>
+        </div>
     </div>
 </div>
 
@@ -37,10 +40,58 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-danger text-white">
+        <div class="card bg-danger text-white" style="cursor: pointer;" onclick="filterHighRisk()">
             <div class="card-body text-center">
-                <h4 class="card-title">{{ consultations|selectattr('is_emergency')|list|length }}</h4>
-                <p class="card-text">Emergency Cases</p>
+                {% set high_risk_count = namespace(value=0) %}
+                {% for c in consultations %}
+                    {% if c.pain_level >= 7 %}
+                        {% set high_risk_count.value = high_risk_count.value + 1 %}
+                    {% endif %}
+                {% endfor %}
+                <h4 class="card-title">{{ high_risk_count.value }}</h4>
+                <p class="card-text">High Risk Cases</p>
+                <small>(Click to filter)</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Appointments Section -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-calendar-check"></i> Today's Appointments ({{ appointments|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if appointments %}
+                    <div class="row">
+                        {% for appt in appointments[:5] %}
+                        <div class="col-md-6 mb-2">
+                            <div class="card border-primary">
+                                <div class="card-body py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ appt.patient.first_name }} {{ appt.patient.last_name }}</strong>
+                                            <br><small class="text-muted">{{ appt.appointment_slot }}</small>
+                                        </div>
+                                        <div>
+                                            <span class="badge bg-{{ 'primary' if appt.appointment_type == 'online' else 'info' }}">
+                                                {{ appt.appointment_type }}
+                                            </span>
+                                            <a href="{{ url_for('view_patient', patient_id=appt.patient_id) }}" class="btn btn-sm btn-primary ms-2">
+                                                View
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">No appointments scheduled</p>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -75,8 +126,10 @@
                                 <tr>
                                     <td>{{ consultation.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                     <td>
-                                        <strong>{{ consultation.patient.username }}</strong><br>
-                                        <small class="text-muted">{{ consultation.patient.email }}</small>
+                                        <a href="{{ url_for('view_patient', patient_id=consultation.patient_id) }}" class="text-decoration-none">
+                                            <strong>{{ consultation.patient.username }}</strong><br>
+                                            <small class="text-muted">{{ consultation.patient.email }}</small>
+                                        </a>
                                     </td>
                                     <td>
                                         <span class="text-truncate d-inline-block" style="max-width: 200px;" 
@@ -201,6 +254,43 @@ function updateStatus(consultationId, status) {
     //     headers: {'Content-Type': 'application/json'},
     //     body: JSON.stringify({consultation_id: consultationId, status: status})
     // });
+}
+
+function filterHighRisk() {
+    const table = document.querySelector('.table tbody');
+    const rows = table.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+        const painBadge = row.querySelector('td:nth-child(4) .badge');
+        if (painBadge) {
+            const painText = painBadge.textContent;
+            const painLevel = parseInt(painText.split('/')[0]);
+            
+            if (painLevel >= 7) {
+                row.style.display = '';
+                row.style.backgroundColor = '#fff3cd'; // Highlight high risk
+            } else {
+                row.style.display = 'none';
+            }
+        }
+    });
+    
+    // Add reset button
+    const cardBody = document.querySelector('.card-body');
+    if (!document.getElementById('resetFilter')) {
+        const resetBtn = document.createElement('button');
+        resetBtn.id = 'resetFilter';
+        resetBtn.className = 'btn btn-sm btn-secondary mt-2';
+        resetBtn.textContent = 'Show All Cases';
+        resetBtn.onclick = function() {
+            rows.forEach(row => {
+                row.style.display = '';
+                row.style.backgroundColor = '';
+            });
+            this.remove();
+        };
+        cardBody.appendChild(resetBtn);
+    }
 }
 </script>
 {% endblock %}

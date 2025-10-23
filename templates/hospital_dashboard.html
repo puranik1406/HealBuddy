@@ -16,23 +16,23 @@
         <div class="card bg-danger text-white">
             <div class="card-body text-center">
                 <h4 class="card-title">{{ emergency_cases|length }}</h4>
-                <p class="card-text">Emergency Alerts</p>
+                <p class="card-text">Emergency Cases</p>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card bg-warning text-white">
+        <div class="card bg-warning text-dark">
             <div class="card-body text-center">
-                <h4 class="card-title">{{ emergency_cases|selectattr('status', 'equalto', 'pending')|list|length }}</h4>
-                <p class="card-text">Pending Response</p>
+                <h4 class="card-title">{{ pending_cases|length }}</h4>
+                <p class="card-text">Pending Cases</p>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card bg-success text-white">
             <div class="card-body text-center">
-                <h4 class="card-title">{{ emergency_cases|selectattr('status', 'equalto', 'completed')|list|length }}</h4>
-                <p class="card-text">Resolved</p>
+                <h4 class="card-title">{{ resolved_cases|length }}</h4>
+                <p class="card-text">Resolved Cases</p>
             </div>
         </div>
     </div>
@@ -73,14 +73,19 @@
                                         <small class="text-muted">ID: {{ case.patient.id }}</small>
                                     </td>
                                     <td>
-                                        <div>
-                                            <i class="fas fa-envelope"></i> {{ case.patient.email }}
-                                        </div>
-                                        {% if case.patient.contact_number %}
-                                        <div>
-                                            <i class="fas fa-phone"></i> {{ case.patient.contact_number }}
+                                        {% if case.patient.phone_number %}
+                                        <div class="text-primary fw-bold">
+                                            <i class="fas fa-phone"></i> {{ case.patient.phone_number }}
                                         </div>
                                         {% endif %}
+                                        {% if case.patient.address %}
+                                        <div class="text-primary fw-bold small">
+                                            <i class="fas fa-map-marker-alt"></i> {{ case.patient.address }}
+                                        </div>
+                                        {% endif %}
+                                        <div class="small text-muted">
+                                            <i class="fas fa-envelope"></i> {{ case.patient.email }}
+                                        </div>
                                     </td>
                                     <td>
                                         <span class="text-truncate d-inline-block" style="max-width: 200px;" 
@@ -100,18 +105,16 @@
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
-                                            <button class="btn btn-sm btn-info" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#caseModal{{ case.id }}">
-                                                <i class="fas fa-eye"></i> View
-                                            </button>
+                                            <a href="{{ url_for('view_patient', patient_id=case.patient_id) }}" class="btn btn-sm btn-info">
+                                                <i class="fas fa-eye"></i> View Patient
+                                            </a>
                                             <button class="btn btn-sm btn-success" 
                                                     onclick="updateCaseStatus({{ case.id }}, 'reviewed')">
                                                 <i class="fas fa-check"></i> Review
                                             </button>
                                             <button class="btn btn-sm btn-primary" 
                                                     onclick="updateCaseStatus({{ case.id }}, 'completed')">
-                                                <i class="fas fa-check-double"></i> Complete
+                                                <i class="fas fa-check-double"></i> Resolve
                                             </button>
                                         </div>
                                     </td>
@@ -150,10 +153,10 @@
                         <div class="card">
                             <div class="card-body">
                                 <p><strong>Name:</strong> {{ case.patient.username }}</p>
-                                <p><strong>Email:</strong> {{ case.patient.email }}</p>
-                                {% if case.patient.contact_number %}
-                                <p><strong>Phone:</strong> {{ case.patient.contact_number }}</p>
+                                {% if case.patient.phone_number %}
+                                <p><strong>Phone:</strong> {{ case.patient.phone_number }}</p>
                                 {% endif %}
+                                <p><strong>Email:</strong> {{ case.patient.email }}</p>
                                 {% if case.patient.blood_group %}
                                 <p><strong>Blood Group:</strong> {{ case.patient.blood_group }}</p>
                                 {% endif %}
@@ -212,16 +215,32 @@
 
 {% block scripts %}
 <script>
-function updateCaseStatus(caseId, status) {
-    // This would typically make an AJAX call to update the status
-    // For now, we'll just show an alert
-    alert(`Case status updated to: ${status}`);
-    // In a real implementation, you would:
-    // fetch('/update_case_status', {
-    //     method: 'POST',
-    //     headers: {'Content-Type': 'application/json'},
-    //     body: JSON.stringify({case_id: caseId, status: status})
-    // });
+async function updateCaseStatus(caseId, status) {
+    try {
+        const response = await fetch('/update_case_status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                case_id: caseId,
+                status: status
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(`Case status updated to: ${status}`);
+            // Reload the page to update the counts
+            location.reload();
+        } else {
+            alert(`Error: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error updating case status');
+    }
 }
 </script>
 {% endblock %}
