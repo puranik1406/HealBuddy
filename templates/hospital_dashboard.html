@@ -11,20 +11,27 @@
     </div>
 </div>
 
+<div class="alert alert-info mb-4">
+    <i class="fas fa-info-circle"></i> 
+    <strong>Emergency Alert Dashboard:</strong> This dashboard shows only cases where patients have triggered the emergency alert button.
+</div>
+
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card bg-danger text-white">
             <div class="card-body text-center">
                 <h4 class="card-title">{{ emergency_cases|length }}</h4>
-                <p class="card-text">Emergency Cases</p>
+                <p class="card-text">Active Emergency Alerts</p>
+                <small>(Pending Response)</small>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card bg-warning text-dark">
+        <div class="card bg-info text-white">
             <div class="card-body text-center">
-                <h4 class="card-title">{{ pending_cases|length }}</h4>
-                <p class="card-text">Pending Cases</p>
+                <h4 class="card-title">{{ all_cases|length }}</h4>
+                <p class="card-text">Total Emergency Alerts</p>
+                <small>(All Time)</small>
             </div>
         </div>
     </div>
@@ -32,7 +39,8 @@
         <div class="card bg-success text-white">
             <div class="card-body text-center">
                 <h4 class="card-title">{{ resolved_cases|length }}</h4>
-                <p class="card-text">Resolved Cases</p>
+                <p class="card-text">Resolved Emergencies</p>
+                <small>(Completed/Reviewed)</small>
             </div>
         </div>
     </div>
@@ -43,7 +51,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="fas fa-exclamation-triangle"></i> Emergency Cases
+                    <i class="fas fa-exclamation-triangle"></i> Active Emergency Alerts (Pending Response)
                 </h5>
             </div>
             <div class="card-body">

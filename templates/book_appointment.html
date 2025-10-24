@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-10 mx-auto">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-calendar-plus"></i> Book Doctor Consultation
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Alert for feedback -->
+                    <div id="alertContainer"></div>
+
+                    <!-- Doctor Selection Section -->
+                    <div class="mb-4">
+                        <h5 class="mb-3">
+                            <i class="fas fa-user-md"></i> Select Doctor
+                        </h5>
+                        <div id="doctorsLoading" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading doctors...</span>
+                            </div>
+                            <p class="mt-2">Loading available doctors...</p>
+                        </div>
+                        <div id="doctorsList" class="row g-3" style="display: none;"></div>
+                    </div>
+
+                    <!-- Appointment Details Form -->
+                    <div id="appointmentForm" style="display: none;">
+                        <hr>
+                        <h5 class="mb-3">
+                            <i class="fas fa-calendar-check"></i> Appointment Details
+                        </h5>
+                        <form id="bookingForm">
+                            <input type="hidden" id="selectedDoctorId" name="doctor_id">
+                            
+                            <div class="mb-3">
+                                <label for="appointmentDate" class="form-label">
+                                    <i class="fas fa-calendar"></i> Preferred Date
+                                </label>
+                                <input type="date" class="form-control" id="appointmentDate" name="appointment_date" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="appointmentTime" class="form-label">
+                                    <i class="fas fa-clock"></i> Preferred Time
+                                </label>
+                                <select class="form-select" id="appointmentTime" name="appointment_time" required>
+                                    <option value="">Select time slot</option>
+                                    <option value="09:00">09:00 AM</option>
+                                    <option value="10:00">10:00 AM</option>
+                                    <option value="11:00">11:00 AM</option>
+                                    <option value="12:00">12:00 PM</option>
+                                    <option value="14:00">02:00 PM</option>
+                                    <option value="15:00">03:00 PM</option>
+                                    <option value="16:00">04:00 PM</option>
+                                    <option value="17:00">05:00 PM</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="consultationType" class="form-label">
+                                    <i class="fas fa-stethoscope"></i> Consultation Type
+                                </label>
+                                <select class="form-select" id="consultationType" name="consultation_type">
+                                    <option value="in-person">In-Person</option>
+                                    <option value="video">Video Consultation</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="reasonForVisit" class="form-label">
+                                    <i class="fas fa-notes-medical"></i> Reason for Visit (Optional)
+                                </label>
+                                <textarea class="form-control" id="reasonForVisit" name="reason" rows="3" placeholder="Briefly describe your symptoms or reason for consultation"></textarea>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-check"></i> Confirm Appointment
+                                </button>
+                                <a href="/symptom_input" class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left"></i> Back to Symptoms
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedDoctor = null;
+
+    // Load doctors on page load
+    document.addEventListener('DOMContentLoaded', async function() {
+        await loadDoctors();
+        
+        // Set minimum date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('appointmentDate').setAttribute('min', today);
+        
+        // Handle form submission
+        document.getElementById('bookingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await bookAppointment();
+        });
+    });
+
+    async function loadDoctors() {
+        try {
+            const response = await fetch('/get_doctors');
+            const doctors = await response.json();
+
+            const doctorsList = document.getElementById('doctorsList');
+            const doctorsLoading = document.getElementById('doctorsLoading');
+
+            if (doctors.length === 0) {
+                doctorsList.innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-info-circle"></i> No doctors available at the moment. Please try again later.
+                        </div>
+                    </div>
+                `;
+            } else {
+                doctors.forEach(doctor => {
+                    const doctorCard = `
+                        <div class="col-md-6">
+                            <div class="card doctor-card ${selectedDoctor === doctor.id ? 'border-primary' : ''}" onclick="selectDoctor(${doctor.id}, '${doctor.name}', '${doctor.specialization}')">
+                                <div class="card-body">
+                                    <h5 class="card-title">
+                                        <i class="fas fa-user-md text-primary"></i> ${doctor.name}
+                                    </h5>
+                                    <p class="card-text mb-1">
+                                        <strong>Specialization:</strong> ${doctor.specialization || 'General Medicine'}
+                                    </p>
+                                    <p class="card-text mb-1">
+                                        <strong>Consultation Fee:</strong> ₹${doctor.fee}
+                                    </p>
+                                    ${selectedDoctor === doctor.id ? '<span class="badge bg-primary"><i class="fas fa-check"></i> Selected</span>' : '<span class="badge bg-secondary">Click to select</span>'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    doctorsList.insertAdjacentHTML('beforeend', doctorCard);
+                });
+            }
+
+            doctorsLoading.style.display = 'none';
+            doctorsList.style.display = 'flex';
+
+        } catch (error) {
+            console.error('Error loading doctors:', error);
+            showAlert('Failed to load doctors. Please try again.', 'danger');
+        }
+    }
+
+    function selectDoctor(doctorId, doctorName, specialization) {
+        selectedDoctor = doctorId;
+        document.getElementById('selectedDoctorId').value = doctorId;
+        document.getElementById('appointmentForm').style.display = 'block';
+        
+        // Update all doctor cards
+        document.querySelectorAll('.doctor-card').forEach(card => {
+            card.classList.remove('border-primary');
+        });
+        event.currentTarget.classList.add('border-primary');
+        
+        // Update badges
+        document.querySelectorAll('.doctor-card .badge').forEach(badge => {
+            badge.className = 'badge bg-secondary';
+            badge.innerHTML = 'Click to select';
+        });
+        event.currentTarget.querySelector('.badge').className = 'badge bg-primary';
+        event.currentTarget.querySelector('.badge').innerHTML = '<i class="fas fa-check"></i> Selected';
+        
+        // Scroll to form
+        document.getElementById('appointmentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function bookAppointment() {
+        const formData = new FormData(document.getElementById('bookingForm'));
+        const appointmentTime = formData.get('appointment_time');
+        
+        // Convert time to slot format (e.g., "09:00" becomes "09:00-10:00")
+        const [hours, minutes] = appointmentTime.split(':');
+        const nextHour = (parseInt(hours) + 1).toString().padStart(2, '0');
+        const appointmentSlot = `${appointmentTime}-${nextHour}:${minutes}`;
+        
+        const data = {
+            doctor_id: parseInt(formData.get('doctor_id')),
+            appointment_date: formData.get('appointment_date'),
+            appointment_slot: appointmentSlot,
+            appointment_type: formData.get('consultation_type')
+        };
+
+        try {
+            const response = await fetch('/book_appointment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showAlert('Appointment booked successfully! Redirecting to dashboard...', 'success');
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+            } else {
+                throw new Error(result.error || 'Failed to book appointment');
+            }
+
+        } catch (error) {
+            console.error('Error booking appointment:', error);
+            showAlert(error.message || 'Failed to book appointment. Please try again.', 'danger');
+        }
+    }
+
+    function showAlert(message, type) {
+        const alertContainer = document.getElementById('alertContainer');
+        alertContainer.innerHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        alertContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+</script>
+
+<style>
+    .doctor-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid #dee2e6;
+    }
+
+    .doctor-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .doctor-card.border-primary {
+        border-color: #0d6efd !important;
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}

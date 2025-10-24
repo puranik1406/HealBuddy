@@ -15,42 +15,19 @@
 </div>
 
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-6">
         <div class="card bg-primary text-white">
             <div class="card-body text-center">
-                <h4 class="card-title">{{ consultations|length }}</h4>
+                <h4 class="card-title">{{ total_cases }}</h4>
                 <p class="card-text">Total Cases</p>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body text-center">
-                <h4 class="card-title">{{ consultations|selectattr('status', 'equalto', 'pending')|list|length }}</h4>
-                <p class="card-text">Pending Review</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
+    <div class="col-md-6">
         <div class="card bg-success text-white">
             <div class="card-body text-center">
-                <h4 class="card-title">{{ consultations|selectattr('status', 'equalto', 'completed')|list|length }}</h4>
+                <h4 class="card-title">{{ completed_cases }}</h4>
                 <p class="card-text">Completed</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-danger text-white" style="cursor: pointer;" onclick="filterHighRisk()">
-            <div class="card-body text-center">
-                {% set high_risk_count = namespace(value=0) %}
-                {% for c in consultations %}
-                    {% if c.pain_level >= 7 %}
-                        {% set high_risk_count.value = high_risk_count.value + 1 %}
-                    {% endif %}
-                {% endfor %}
-                <h4 class="card-title">{{ high_risk_count.value }}</h4>
-                <p class="card-text">High Risk Cases</p>
-                <small>(Click to filter)</small>
             </div>
         </div>
     </div>
@@ -61,118 +38,66 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="fas fa-calendar-check"></i> Today's Appointments ({{ appointments|length }})</h5>
+                <h5 class="mb-0"><i class="fas fa-calendar-check"></i> My Appointments ({{ appointments|length }})</h5>
             </div>
             <div class="card-body">
                 {% if appointments %}
-                    <div class="row">
-                        {% for appt in appointments[:5] %}
-                        <div class="col-md-6 mb-2">
-                            <div class="card border-primary">
-                                <div class="card-body py-2">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <strong>{{ appt.patient.first_name }} {{ appt.patient.last_name }}</strong>
-                                            <br><small class="text-muted">{{ appt.appointment_slot }}</small>
-                                        </div>
-                                        <div>
-                                            <span class="badge bg-{{ 'primary' if appt.appointment_type == 'online' else 'info' }}">
-                                                {{ appt.appointment_type }}
-                                            </span>
-                                            <a href="{{ url_for('view_patient', patient_id=appt.patient_id) }}" class="btn btn-sm btn-primary ms-2">
-                                                View
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="text-muted mb-0">No appointments scheduled</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-clipboard-list"></i> Patient Consultations
-                </h5>
-            </div>
-            <div class="card-body">
-                {% if consultations %}
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
                                     <th>Date</th>
+                                    <th>Time</th>
                                     <th>Patient</th>
-                                    <th>Symptoms</th>
-                                    <th>Pain Level</th>
-                                    <th>AI Analysis</th>
+                                    <th>Type</th>
                                     <th>Status</th>
-                                    <th>Emergency</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for consultation in consultations %}
+                                {% for appt in appointments %}
                                 <tr>
-                                    <td>{{ consultation.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>{{ appt.appointment_date.strftime('%Y-%m-%d') if appt.appointment_date else 'N/A' }}</td>
+                                    <td>{{ appt.appointment_slot }}</td>
                                     <td>
-                                        <a href="{{ url_for('view_patient', patient_id=consultation.patient_id) }}" class="text-decoration-none">
-                                            <strong>{{ consultation.patient.username }}</strong><br>
-                                            <small class="text-muted">{{ consultation.patient.email }}</small>
+                                        <a href="{{ url_for('view_patient', patient_id=appt.patient_id) }}" class="text-decoration-none">
+                                            <strong>{{ appt.patient.first_name }} {{ appt.patient.last_name }}</strong><br>
+                                            <small class="text-muted">{{ appt.patient.email }}</small>
                                         </a>
                                     </td>
                                     <td>
-                                        <span class="text-truncate d-inline-block" style="max-width: 200px;" 
-                                              title="{{ consultation.symptoms }}">
-                                            {{ consultation.symptoms[:50] }}{% if consultation.symptoms|length > 50 %}...{% endif %}
+                                        <span class="badge bg-{{ 'primary' if appt.appointment_type == 'online' else 'info' }}">
+                                            {{ appt.appointment_type }}
                                         </span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-{% if consultation.pain_level <= 3 %}success{% elif consultation.pain_level <= 6 %}warning{% else %}danger{% endif %}">
-                                            {{ consultation.pain_level }}/10
+                                        <span class="badge bg-{% if appt.status == 'confirmed' %}success{% elif appt.status == 'completed' %}info{% else %}warning{% endif %}">
+                                            {{ appt.status.title() }}
                                         </span>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-info" 
-                                                data-bs-toggle="modal" 
-                                                data-bs-target="#analysisModal{{ consultation.id }}">
-                                            <i class="fas fa-eye"></i> View
-                                        </button>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-{% if consultation.status == 'completed' %}success{% elif consultation.status == 'reviewed' %}info{% else %}secondary{% endif %}">
-                                            {{ consultation.status.title() }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {% if consultation.is_emergency %}
-                                            <span class="badge bg-danger">
-                                                <i class="fas fa-exclamation-triangle"></i> Emergency
+                                        <div class="d-flex gap-2">
+                                            <a href="{{ url_for('view_patient', patient_id=appt.patient_id) }}" 
+                                               class="btn btn-sm btn-outline-info">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                            {% if appt.consultation_id and appt.status != 'completed' %}
+                                            <button class="btn btn-sm btn-success fw-bold" 
+                                                    onclick="markConsultationComplete({{ appt.consultation_id }}, {{ appt.id }})"
+                                                    title="Mark this consultation as completed">
+                                                <i class="fas fa-check-circle"></i> Mark Complete
+                                            </button>
+                                            {% elif appt.status == 'completed' %}
+                                            <span class="badge bg-success align-self-center">
+                                                <i class="fas fa-check-double"></i> Completed
                                             </span>
-                                        {% else %}
-                                            <span class="badge bg-success">Normal</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="btn-group" role="group">
-                                            <button class="btn btn-sm btn-success" 
-                                                    onclick="updateStatus({{ consultation.id }}, 'reviewed')">
-                                                <i class="fas fa-check"></i>
+                                            {% else %}
+                                            <button class="btn btn-sm btn-success fw-bold" 
+                                                    onclick="markAppointmentComplete({{ appt.id }})"
+                                                    title="Mark this appointment as completed">
+                                                <i class="fas fa-check-circle"></i> Mark Complete
                                             </button>
-                                            <button class="btn btn-sm btn-primary" 
-                                                    onclick="updateStatus({{ consultation.id }}, 'completed')">
-                                                <i class="fas fa-check-double"></i>
-                                            </button>
+                                            {% endif %}
                                         </div>
                                     </td>
                                 </tr>
@@ -182,8 +107,8 @@
                     </div>
                 {% else %}
                     <div class="text-center py-4">
-                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No consultations assigned to you yet.</p>
+                        <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No appointments scheduled</p>
                     </div>
                 {% endif %}
             </div>
@@ -244,52 +169,69 @@
 
 {% block scripts %}
 <script>
-function updateStatus(consultationId, status) {
-    // This would typically make an AJAX call to update the status
-    // For now, we'll just show an alert
-    alert(`Status updated to: ${status}`);
-    // In a real implementation, you would:
-    // fetch('/update_consultation_status', {
-    //     method: 'POST',
-    //     headers: {'Content-Type': 'application/json'},
-    //     body: JSON.stringify({consultation_id: consultationId, status: status})
-    // });
+async function markConsultationComplete(consultationId, appointmentId) {
+    if (!confirm('✅ Mark this patient consultation as completed?\n\nThis will remove the patient from your dashboard.')) {
+        return;
+    }
+    
+    try {
+        // Update consultation status
+        const response = await fetch('/update_case_status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                case_id: consultationId,
+                status: 'completed'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            HealBuddy.showAlert('✅ Consultation marked as completed! Patient removed from dashboard.', 'success');
+            // Reload the page to update counts and remove patient
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            HealBuddy.showAlert('Error: ' + data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        HealBuddy.showAlert('Error marking consultation as completed', 'danger');
+    }
 }
 
-function filterHighRisk() {
-    const table = document.querySelector('.table tbody');
-    const rows = table.querySelectorAll('tr');
+async function markAppointmentComplete(appointmentId) {
+    if (!confirm('✅ Mark this appointment as completed?\n\nThis will remove it from your dashboard.')) {
+        return;
+    }
     
-    rows.forEach(row => {
-        const painBadge = row.querySelector('td:nth-child(4) .badge');
-        if (painBadge) {
-            const painText = painBadge.textContent;
-            const painLevel = parseInt(painText.split('/')[0]);
-            
-            if (painLevel >= 7) {
-                row.style.display = '';
-                row.style.backgroundColor = '#fff3cd'; // Highlight high risk
-            } else {
-                row.style.display = 'none';
-            }
+    try {
+        // Update appointment status directly
+        const response = await fetch('/update_appointment_status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                appointment_id: appointmentId,
+                status: 'completed'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            HealBuddy.showAlert('✅ Appointment marked as completed! Removed from dashboard.', 'success');
+            // Reload the page
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            HealBuddy.showAlert('Error: ' + data.error, 'danger');
         }
-    });
-    
-    // Add reset button
-    const cardBody = document.querySelector('.card-body');
-    if (!document.getElementById('resetFilter')) {
-        const resetBtn = document.createElement('button');
-        resetBtn.id = 'resetFilter';
-        resetBtn.className = 'btn btn-sm btn-secondary mt-2';
-        resetBtn.textContent = 'Show All Cases';
-        resetBtn.onclick = function() {
-            rows.forEach(row => {
-                row.style.display = '';
-                row.style.backgroundColor = '';
-            });
-            this.remove();
-        };
-        cardBody.appendChild(resetBtn);
+    } catch (error) {
+        console.error('Error:', error);
+        HealBuddy.showAlert('Error marking appointment as completed', 'danger');
     }
 }
 </script>

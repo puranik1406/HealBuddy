@@ -142,42 +142,92 @@ def load_user(user_id):
 # AI Integration Functions
 def transcribe_audio(audio_data):
     """Transcribe audio using Google Speech Recognition"""
+    webm_path = None
+    wav_path = None
+    
     try:
-        # Save audio data to temporary file
+        # Save audio data to temporary webm file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
             temp_file.write(audio_data)
-            temp_file_path = temp_file.name
+            webm_path = temp_file.name
+        
+        print(f"WebM file saved: {webm_path}, size: {len(audio_data)} bytes")
+        
+        # Convert WebM to WAV using pydub
+        try:
+            from pydub import AudioSegment
+            
+            # Load webm audio
+            audio = AudioSegment.from_file(webm_path, format="webm")
+            
+            # Convert to WAV format (16kHz, mono, 16-bit) - optimal for speech recognition
+            audio = audio.set_frame_rate(16000).set_channels(1)
+            
+            # Save as WAV
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as wav_file:
+                wav_path = wav_file.name
+            
+            audio.export(wav_path, format="wav")
+            print(f"Converted to WAV: {wav_path}")
+            
+        except ImportError:
+            print("pydub not available, trying direct conversion")
+            # Fallback: Try using speech_recognition's built-in conversion
+            wav_path = webm_path
+        except Exception as e:
+            print(f"Error converting audio format: {e}")
+            # Try using the webm file directly
+            wav_path = webm_path
+        
+        # Initialize recognizer
+        recognizer = sr.Recognizer()
+        
+        # Adjust for ambient noise and energy threshold
+        recognizer.energy_threshold = 300
+        recognizer.dynamic_energy_threshold = True
         
         try:
-            # Initialize recognizer
-            recognizer = sr.Recognizer()
-            
             # Load audio file
-            with sr.AudioFile(temp_file_path) as source:
-                audio = recognizer.record(source)
+            with sr.AudioFile(wav_path) as source:
+                # Adjust for ambient noise
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                # Record the audio
+                audio_recorded = recognizer.record(source)
+            
+            print("Audio loaded successfully, attempting recognition...")
             
             # Use Google Speech Recognition (free)
-            transcript = recognizer.recognize_google(audio)
+            transcript = recognizer.recognize_google(audio_recorded)
+            print(f"Transcription successful: {transcript}")
             return transcript
                 
         except sr.UnknownValueError:
             print("Google Speech Recognition could not understand audio")
-            return None
+            return "Could not understand the audio. Please speak clearly and try again."
         except sr.RequestError as e:
             print(f"Could not request results from Google Speech Recognition service; {e}")
+            return f"Speech recognition service error: {e}"
+        except Exception as e:
+            print(f"Error during recognition: {e}")
+            import traceback
+            traceback.print_exc()
             return None
-        finally:
-            # Clean up temporary file
-            try:
-                os.unlink(temp_file_path)
-            except Exception as e:
-                print(f"Error cleaning up temp file: {e}")
     
     except Exception as e:
         print(f"Error in transcription: {e}")
         import traceback
         traceback.print_exc()
         return None
+    
+    finally:
+        # Clean up temporary files
+        for path in [webm_path, wav_path]:
+            if path and os.path.exists(path):
+                try:
+                    os.unlink(path)
+                    print(f"Cleaned up: {path}")
+                except Exception as e:
+                    print(f"Error cleaning up {path}: {e}")
 
 def analyze_symptoms(symptoms_text, severity=None):
     """Analyze symptoms using Gemini AI"""
@@ -492,16 +542,60 @@ def dashboard():
     if current_user.user_type == 'patient':
         consultations = Consultation.query.filter_by(patient_id=current_user.id).order_by(Consultation.created_at.desc()).limit(10).all()
         appointments = Appointment.query.filter_by(patient_id=current_user.id).order_by(Appointment.appointment_date.desc()).limit(5).all()
-        return render_template('patient_dashboard.html', consultations=consultations, appointments=appointments, get_severity=get_severity_classification)
+        
+        # Create a mapping of consultation_id to appointment for easy lookup
+        consultation_appointments = {}
+        for appointment in Appointment.query.filter_by(patient_id=current_user.id).all():
+            if appointment.consultation_id:
+                consultation_appointments[appointment.consultation_id] = appointment
+        
+        return render_template('patient_dashboard.html', 
+                             consultations=consultations, 
+                             appointments=appointments,
+                             consultation_appointments=consultation_appointments,
+                             get_severity=get_severity_classification)
     elif current_user.user_type == 'doctor':
+        # Get all consultations assigned to this doctor
         consultations = Consultation.query.filter_by(doctor_id=current_user.id).order_by(Consultation.created_at.desc()).all()
-        appointments = Appointment.query.filter_by(doctor_id=current_user.id).order_by(Appointment.appointment_date).all()
-        return render_template('doctor_dashboard.html', consultations=consultations, appointments=appointments, get_severity=get_severity_classification)
+        
+        # Get all appointments for this doctor
+        all_appointments = Appointment.query.filter_by(doctor_id=current_user.id).order_by(Appointment.appointment_date).all()
+        
+        # Filter out completed appointments and appointments with completed consultations
+        appointments = []
+        for appt in all_appointments:
+            # Skip if appointment itself is completed
+            if appt.status == 'completed':
+                continue
+            
+            # If appointment has no consultation, include it
+            if not appt.consultation_id:
+                appointments.append(appt)
+            else:
+                # Check if consultation is completed
+                consultation = Consultation.query.get(appt.consultation_id)
+                if consultation and consultation.status != 'completed':
+                    appointments.append(appt)
+        
+        # Calculate case counts
+        total_cases = len(consultations)
+        completed_cases = len([c for c in consultations if c.status == 'completed'])
+        
+        return render_template('doctor_dashboard.html', 
+                             consultations=consultations, 
+                             appointments=appointments, 
+                             total_cases=total_cases,
+                             completed_cases=completed_cases,
+                             get_severity=get_severity_classification)
     elif current_user.user_type == 'hospital':
-        all_cases = Consultation.query.order_by(Consultation.created_at.desc()).all()
-        emergency_cases = [c for c in all_cases if c.is_emergency]
-        pending_cases = [c for c in all_cases if c.status == 'pending']
+        # Only show cases where patient explicitly triggered emergency alert (is_emergency=True)
+        all_cases = Consultation.query.filter_by(is_emergency=True).order_by(Consultation.created_at.desc()).all()
+        
+        # Filter emergency cases based on status within the emergency-only cases
+        emergency_cases = [c for c in all_cases if c.status == 'pending']  # Active emergencies
+        pending_cases = [c for c in all_cases if c.status == 'pending']  # Same as emergency for now
         resolved_cases = [c for c in all_cases if c.status in ['completed', 'reviewed']]
+        
         return render_template('hospital_dashboard.html', 
                              all_cases=all_cases,
                              emergency_cases=emergency_cases, 
@@ -510,6 +604,49 @@ def dashboard():
                              get_severity=get_severity_classification)
     
     return redirect(url_for('index'))
+
+@app.route('/view_consultation/<int:consultation_id>')
+@login_required
+def view_consultation(consultation_id):
+    """View AI consultation details"""
+    if current_user.user_type != 'patient':
+        return jsonify({'error': 'Access denied'}), 403
+    
+    consultation = Consultation.query.get_or_404(consultation_id)
+    
+    # Ensure user can only view their own consultations
+    if consultation.patient_id != current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    # Parse AI response
+    try:
+        ai_response = json.loads(consultation.ai_response) if consultation.ai_response else {}
+    except:
+        ai_response = {}
+    
+    # Check if appointment exists for this consultation
+    appointment = Appointment.query.filter_by(consultation_id=consultation_id).first()
+    
+    return jsonify({
+        'id': consultation.id,
+        'symptoms': consultation.symptoms,
+        'duration': consultation.duration,
+        'pain_level': consultation.pain_level,
+        'severity': get_severity_classification(consultation.pain_level),
+        'created_at': consultation.created_at.strftime('%Y-%m-%d %H:%M'),
+        'is_emergency': consultation.is_emergency,
+        'status': consultation.status,
+        'ai_response': ai_response,
+        'has_appointment': appointment is not None,
+        'appointment': {
+            'id': appointment.id,
+            'date': appointment.appointment_date.strftime('%Y-%m-%d %H:%M') if appointment.appointment_date else None,
+            'slot': appointment.appointment_slot,
+            'type': appointment.appointment_type,
+            'status': appointment.status,
+            'doctor_name': f"Dr. {appointment.doctor.first_name} {appointment.doctor.last_name}" if appointment.doctor.first_name else appointment.doctor.username
+        } if appointment else None
+    })
 
 @app.route('/symptom_input')
 @login_required
@@ -526,52 +663,76 @@ def upload_audio():
         return jsonify({'error': 'Access denied'}), 403
     
     try:
+        # Check if audio file is present
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+        
         # Get audio data and severity from request
-        audio_data = request.files['audio'].read()
-        severity = request.form.get('severity', type=int)
+        audio_file = request.files['audio']
+        audio_data = audio_file.read()
+        
+        if len(audio_data) == 0:
+            return jsonify({'error': 'Empty audio file received'}), 400
+        
+        severity = request.form.get('severity', type=int) or 5
+        
+        print(f"Received audio file, size: {len(audio_data)} bytes, severity: {severity}")
         
         # Transcribe audio
         symptoms_text = transcribe_audio(audio_data)
-        if not symptoms_text:
-            return jsonify({'error': 'Failed to transcribe audio'}), 500
         
-        print(f"Transcribed text: {symptoms_text}")  # Debug log
+        # Handle transcription failures gracefully
+        if not symptoms_text or "Could not understand" in symptoms_text or "error" in symptoms_text.lower():
+            error_message = symptoms_text if symptoms_text else "Failed to transcribe audio. Please try speaking more clearly."
+            return jsonify({
+                'error': error_message,
+                'transcription': symptoms_text,
+                'suggestion': 'Please try recording again and speak clearly, or use text input instead.'
+            }), 400
         
-        # Analyze symptoms with severity
+        print(f"Transcribed text: {symptoms_text}")
+        
+        # Analyze symptoms with severity - this returns initial analysis with follow-up questions
         analysis = analyze_symptoms(symptoms_text, severity)
         
-        print(f"Analysis result: {analysis}")  # Debug log
+        if not analysis:
+            return jsonify({'error': 'Failed to analyze symptoms'}), 500
         
-        # Save consultation record with expanded analysis
-        consultation = Consultation(
-            patient_id=current_user.id,
-            symptoms=symptoms_text,
-            duration=analysis.get('duration', 'unknown'),
-            pain_level=severity if severity else analysis.get('pain_level', 5),
-            ai_response=json.dumps({
-                'recommendations': analysis.get('recommendations', ''),
-                'possible_conditions': analysis.get('possible_conditions', ''),
-                'diagnosis': analysis.get('diagnosis', '')
-            }),
-            is_emergency=analysis.get('pain_level', 5) >= 8 or analysis.get('urgency') == 'high'
-        )
+        print(f"Initial analysis completed successfully")
+        print(f"Follow-up questions: {len(analysis.get('follow_up_questions', []))}")
+        print(f"Identified symptoms: {analysis.get('identified_symptoms', [])}")
         
-        db.session.add(consultation)
-        db.session.commit()
+        # DON'T save consultation here - let the user answer follow-up questions first
+        # Consultation will be saved when user clicks "Update Analysis" (via /finalize_analysis)
         
-        # Generate TTS response
-        tts_audio = generate_tts_response(analysis.get('recommendations', ''))
+        # Generate TTS response for the recommendations
+        tts_audio = None
+        try:
+            # Create a summary message for TTS
+            summary_parts = []
+            if analysis.get('diagnosis'):
+                summary_parts.append(analysis.get('diagnosis'))
+            if analysis.get('recommendations'):
+                summary_parts.append(analysis.get('recommendations'))
+            
+            tts_text = '. '.join(summary_parts) if summary_parts else 'Analysis complete. Please review the results.'
+            tts_audio = generate_tts_response(tts_text)
+        except Exception as tts_error:
+            print(f"TTS generation failed: {tts_error}")
         
+        # Return transcription and initial analysis (with follow-up questions)
+        # Frontend will display this and allow user to adjust severities and answer questions
         return jsonify({
             'transcription': symptoms_text,
             'analysis': analysis,
-            'consultation_id': consultation.id,
             'tts_audio': base64.b64encode(tts_audio).decode('utf-8') if tts_audio else None
         })
     
     except Exception as e:
         print(f"Error in upload_audio: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 @app.route('/submit_symptoms', methods=['POST'])
 @login_required
@@ -733,9 +894,18 @@ def trigger_emergency():
         return jsonify({'error': 'Access denied'}), 403
     
     try:
-        # Get emergency details
-        data = request.json or {}
-        symptoms = data.get('symptoms', 'EMERGENCY ALERT TRIGGERED')
+        # Get emergency details from request (could be JSON or form data or empty)
+        data = request.get_json(silent=True) or {}
+        symptoms = data.get('symptoms', 'EMERGENCY ALERT TRIGGERED BY PATIENT')
+        
+        # Create AI response in JSON format
+        ai_emergency_response = {
+            'diagnosis': 'Emergency alert triggered by patient',
+            'recommendations': 'Emergency services have been notified. Stay calm and wait for medical assistance.',
+            'urgency': 'high',
+            'possible_conditions': ['Emergency situation requiring immediate medical attention'],
+            'red_flags': ['Patient has triggered emergency alert button']
+        }
         
         # Create emergency consultation
         consultation = Consultation(
@@ -743,8 +913,9 @@ def trigger_emergency():
             symptoms=symptoms,
             duration="immediate",
             pain_level=10,
-            ai_response="Emergency services have been notified",
-            is_emergency=True
+            ai_response=json.dumps(ai_emergency_response),
+            is_emergency=True,
+            status='pending'
         )
         
         db.session.add(consultation)
@@ -762,21 +933,26 @@ def trigger_emergency():
         
         # In production, this would send actual notifications to hospitals
         # For now, we just log which hospitals should be notified
-        print(f"Emergency Alert: Patient {current_user.username} (ID: {current_user.id})")
+        print(f"🚨 EMERGENCY ALERT TRIGGERED 🚨")
+        print(f"Patient: {current_user.username} (ID: {current_user.id})")
+        print(f"Contact: {current_user.phone_number or 'Not provided'}")
+        print(f"Address: {current_user.address or 'Not provided'}")
+        print(f"Emergency Contact: {current_user.emergency_contact_name} - {current_user.emergency_contact_phone}" if current_user.emergency_contact_name else "No emergency contact")
         print(f"Preferred Hospitals to notify: {preferred_hospitals}")
         print(f"All hospitals in system will also be notified")
         
         return jsonify({
             'success': True, 
             'message': 'Emergency alert sent to all nearby and preferred hospitals',
-            'hospitals_notified': len(preferred_hospitals) if preferred_hospitals else 'all'
+            'hospitals_notified': len(preferred_hospitals) if preferred_hospitals else 'all',
+            'consultation_id': consultation.id
         })
     
     except Exception as e:
         print(f"Error in trigger_emergency: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({'error': str(e), 'success': False}), 500
 
 @app.route('/update_case_status', methods=['POST'])
 @login_required
@@ -805,6 +981,36 @@ def update_case_status():
     
     except Exception as e:
         print(f"Error in update_case_status: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/update_appointment_status', methods=['POST'])
+@login_required
+def update_appointment_status():
+    if current_user.user_type != 'doctor':
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        appointment_id = request.json.get('appointment_id')
+        new_status = request.json.get('status')
+        
+        if not appointment_id or not new_status:
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        appointment = Appointment.query.get(appointment_id)
+        if not appointment:
+            return jsonify({'error': 'Appointment not found'}), 404
+        
+        # Verify doctor owns this appointment
+        if appointment.doctor_id != current_user.id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        appointment.status = new_status
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': f'Appointment status updated to {new_status}'})
+    
+    except Exception as e:
+        print(f"Error in update_appointment_status: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/hospitals')
@@ -1036,6 +1242,24 @@ Respond with ONLY the specialization name, nothing else."""
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/schedule_consultation')
+@login_required
+def schedule_consultation():
+    """Show appointment booking page"""
+    if current_user.user_type != 'patient':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    return render_template('book_appointment.html')
+
+@app.route('/order_medicine')
+@login_required
+def order_medicine():
+    """Show medicine ordering page"""
+    if current_user.user_type != 'patient':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    return render_template('order_medicine.html')
 
 @app.route('/update_patient_profile', methods=['POST'])
 @login_required

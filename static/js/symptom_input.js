@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let isRecording = false;
     let currentAudioData = null;
+    let mediaRecorder = null;
+    let audioStream = null;
 
     // Voice Recording Functions
     recordBtn.addEventListener('click', startRecording);
@@ -50,7 +52,13 @@ document.addEventListener('DOMContentLoaded', function() {
     async function startRecording() {
         try {
             // Request microphone permission
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    sampleRate: 16000
+                } 
+            });
             
             // Update UI
             recordBtn.style.display = 'none';
@@ -58,44 +66,70 @@ document.addEventListener('DOMContentLoaded', function() {
             recordingStatus.style.display = 'block';
             
             // Start recording
-            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder = new MediaRecorder(audioStream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
             const audioChunks = [];
             
             mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
             };
             
             mediaRecorder.onstop = () => {
-                // Most browsers record as webm/opus via MediaRecorder
+                console.log('Recording stopped, processing audio...');
+                // Create blob from recorded chunks
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                processAudioRecording(audioBlob);
+                console.log('Audio blob created, size:', audioBlob.size);
+                
+                if (audioBlob.size > 0) {
+                    processAudioRecording(audioBlob);
+                } else {
+                    console.error('Audio blob is empty');
+                    HealBuddy.showAlert('Recording failed - no audio data captured. Please try again.', 'danger');
+                    resetRecordingUI();
+                }
                 
                 // Stop all tracks
-                stream.getTracks().forEach(track => track.stop());
+                if (audioStream) {
+                    audioStream.getTracks().forEach(track => track.stop());
+                    audioStream = null;
+                }
+            };
+            
+            mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+                HealBuddy.showAlert('Recording error: ' + event.error, 'danger');
+                resetRecordingUI();
             };
             
             mediaRecorder.start();
             isRecording = true;
+            console.log('Recording started');
             
             // Auto-stop after 30 seconds
             setTimeout(() => {
                 if (isRecording) {
+                    console.log('Auto-stopping recording after 30 seconds');
                     stopRecording();
                 }
             }, 30000);
             
         } catch (error) {
             console.error('Error starting recording:', error);
-            HealBuddy.showAlert('Could not access microphone. Please check permissions.', 'danger');
+            HealBuddy.showAlert('Could not access microphone. Please check permissions and ensure you are using HTTPS or localhost.', 'danger');
             resetRecordingUI();
         }
     }
 
     function stopRecording() {
-        if (isRecording) {
-            // The mediaRecorder will be stopped in the onstop event
+        console.log('stopRecording called, isRecording:', isRecording);
+        if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') {
+            // Stop the media recorder
+            mediaRecorder.stop();
             isRecording = false;
-            resetRecordingUI();
+            console.log('MediaRecorder stopped');
         }
     }
 
@@ -112,8 +146,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Processing...</span>
                 </div>
-                <p class="mt-2">Processing your audio...</p>
+                <p class="mt-2">Transcribing your audio...</p>
             `;
+            recordingStatus.style.display = 'block';
 
             // Create FormData for file upload
             const formData = new FormData();
@@ -121,10 +156,10 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('audio', audioBlob, 'recording.webm');
             
             // Add severity if available
-            const severity = document.getElementById('severityRange')?.value;
-            if (severity) {
-                formData.append('severity', severity);
-            }
+            const severity = document.getElementById('severityRange')?.value || '5';
+            formData.append('severity', severity);
+
+            console.log('Uploading audio for transcription, size:', audioBlob.size);
 
             // Send to server
             const response = await fetch('/upload_audio', {
@@ -135,14 +170,27 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
 
             if (response.ok) {
+                console.log('Audio processed successfully');
                 displayResults(data);
+                // Success message is shown by displayResults function
             } else {
-                throw new Error(data.error || 'Failed to process audio');
+                // Handle transcription errors
+                console.error('Transcription error:', data.error);
+                let errorMsg = data.error || 'Failed to process audio';
+                if (data.suggestion) {
+                    errorMsg += ' ' + data.suggestion;
+                }
+                HealBuddy.showAlert(errorMsg, 'warning');
+                
+                // If transcription provided but incomplete, show it
+                if (data.transcription) {
+                    console.log('Partial transcription:', data.transcription);
+                }
             }
 
         } catch (error) {
             console.error('Error processing audio:', error);
-            HealBuddy.showAlert('Error processing audio: ' + error.message, 'danger');
+            HealBuddy.showAlert('Error processing audio: ' + error.message + '. Please try text input instead.', 'danger');
         } finally {
             resetRecordingUI();
         }
@@ -196,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayResults(data) {
         const analysis = data.analysis;
         
-        // Show transcription if available
+        // Show transcription if available (from voice input)
         if (data.transcription) {
             document.getElementById('transcriptionResult').style.display = 'block';
             document.getElementById('transcriptionText').textContent = data.transcription;
@@ -214,13 +262,62 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Clear existing symptom sliders and follow-up area
     symptomsSeverityContainer.innerHTML = '';
-    // Remove any previous follow-up container
+    // Remove any previous follow-up container and diagnosis summary
     const existingFollowUp = document.getElementById('followUpContainer');
     if (existingFollowUp) existingFollowUp.remove();
+    const existingDiagnosis = document.getElementById('initialDiagnosisSummary');
+    if (existingDiagnosis) existingDiagnosis.remove();
+
+        // Show initial diagnosis summary prominently
+        if (aiResponse.diagnosis || aiResponse.possible_conditions) {
+            const diagnosisSummary = document.createElement('div');
+            diagnosisSummary.id = 'initialDiagnosisSummary';
+            diagnosisSummary.className = 'mb-4';
+            
+            let summaryHTML = '<div class="card border-primary"><div class="card-header bg-primary text-white">';
+            summaryHTML += '<h6 class="mb-0"><i class="fas fa-stethoscope"></i> Initial AI Diagnosis Summary</h6>';
+            summaryHTML += '</div><div class="card-body">';
+            
+            // Show preliminary diagnosis
+            if (aiResponse.diagnosis) {
+                summaryHTML += `<div class="mb-3"><strong>Preliminary Analysis:</strong><p class="mt-2">${aiResponse.diagnosis}</p></div>`;
+            }
+            
+            // Show possible conditions
+            if (aiResponse.possible_conditions && aiResponse.possible_conditions.length > 0) {
+                summaryHTML += '<div class="mb-3"><strong>Possible Conditions:</strong><ul class="mt-2">';
+                aiResponse.possible_conditions.forEach(condition => {
+                    summaryHTML += `<li>${condition}</li>`;
+                });
+                summaryHTML += '</ul></div>';
+            }
+            
+            // Show red flags if any
+            if (aiResponse.red_flags && aiResponse.red_flags.length > 0) {
+                summaryHTML += '<div class="alert alert-danger mb-0"><strong><i class="fas fa-exclamation-triangle"></i> Warning Signs:</strong><ul class="mt-2 mb-0">';
+                aiResponse.red_flags.forEach(flag => {
+                    summaryHTML += `<li>${flag}</li>`;
+                });
+                summaryHTML += '</ul></div>';
+            }
+            
+            summaryHTML += '</div></div>';
+            diagnosisSummary.innerHTML = summaryHTML;
+            symptomsSeverityContainer.insertAdjacentElement('beforebegin', diagnosisSummary);
+        }
 
         // Create sliders for each identified symptom
         const identified = aiResponse.identified_symptoms || [];
         const defaults = aiResponse.default_severities || [];
+        
+        if (identified.length > 0) {
+            // Add header for symptom severity section
+            const severityHeader = document.createElement('div');
+            severityHeader.className = 'mb-3';
+            severityHeader.innerHTML = '<h6 class="text-primary"><i class="fas fa-sliders-h"></i> Adjust Symptom Severities:</h6><p class="text-muted small">Please adjust the severity for each symptom based on how you feel (1=mild, 10=severe)</p>';
+            symptomsSeverityContainer.appendChild(severityHeader);
+        }
+        
         identified.forEach((symptom, index) => {
             const defaultSeverity = defaults[index] || 5;
             const sliderId = `symptom-severity-${index}`;
@@ -255,17 +352,27 @@ document.addEventListener('DOMContentLoaded', function() {
         if (followUps.length > 0) {
             const followUpContainer = document.createElement('div');
             followUpContainer.id = 'followUpContainer';
-            followUpContainer.className = 'mb-3';
-            followUpContainer.innerHTML = '<h6>Follow-up questions:</h6>';
+            followUpContainer.className = 'mb-4';
+            
+            let followUpHTML = '<div class="card border-info">';
+            followUpHTML += '<div class="card-header bg-info text-white">';
+            followUpHTML += '<h6 class="mb-0"><i class="fas fa-question-circle"></i> Follow-up Questions</h6>';
+            followUpHTML += '</div><div class="card-body">';
+            followUpHTML += '<p class="text-muted small mb-3">Please answer these questions to help refine the diagnosis:</p>';
+            
             followUps.forEach((q, i) => {
-                const qHtml = `
-                    <div class="mb-2">
-                        <label class="form-label">${q}</label>
-                        <input type="text" class="form-control follow-up-input" data-question="${q}" />
+                followUpHTML += `
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">${i + 1}. ${q}</label>
+                        <input type="text" class="form-control follow-up-input" 
+                               data-question="${q}" 
+                               placeholder="Your answer..." />
                     </div>
                 `;
-                followUpContainer.insertAdjacentHTML('beforeend', qHtml);
             });
+            
+            followUpHTML += '</div></div>';
+            followUpContainer.innerHTML = followUpHTML;
             symptomsSeverityContainer.insertAdjacentElement('afterend', followUpContainer);
         }
 
@@ -291,7 +398,16 @@ document.addEventListener('DOMContentLoaded', function() {
         resultsSection.style.display = 'block';
         resultsSection.scrollIntoView({ behavior: 'smooth' });
 
-        HealBuddy.showAlert('Initial analysis complete. Adjust per-symptom sliders and answer follow-up questions if any, then click Update Analysis.', 'info');
+        // Show appropriate message based on what's available
+        let alertMessage = '✅ Initial diagnosis complete! ';
+        if (followUps.length > 0) {
+            alertMessage += 'Please answer the follow-up questions and adjust symptom severities, then click "Update Analysis" for final recommendations.';
+        } else if (identified.length > 0) {
+            alertMessage += 'Please adjust the symptom severities if needed, then click "Update Analysis" for final recommendations.';
+        } else {
+            alertMessage += 'Review the diagnosis summary below.';
+        }
+        HealBuddy.showAlert(alertMessage, 'info');
     }
 
     function getPainLevelColor(level) {
@@ -360,6 +476,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show the detailed analysis section
         detailedAnalysis.style.display = 'block';
 
+        // Save suggested medications to localStorage for order_medicine page
+        if (analysis.suggested_medications && analysis.suggested_medications.length > 0) {
+            localStorage.setItem('suggestedMedications', JSON.stringify(analysis.suggested_medications));
+        }
+
         // Update duration
         document.getElementById('durationResult').textContent = analysis.duration || 'Unknown';
 
@@ -394,29 +515,29 @@ document.addEventListener('DOMContentLoaded', function() {
         const recommendationOptions = document.getElementById('recommendationOptions');
         recommendationOptions.innerHTML = '';
 
-        if (overallSeverity >= 8) {
-            // Severe case - Doctor consultation
+        if (overallSeverity >= 6) {
+            // High severity (6-10) - Only Doctor consultation
             recommendationOptions.innerHTML = `
                 <div class="alert alert-danger">
-                    <h6><i class="fas fa-exclamation-circle"></i> Urgent Medical Attention Recommended</h6>
-                    <p>Based on the severity of your symptoms, immediate medical consultation is advised.</p>
+                    <h6><i class="fas fa-exclamation-circle"></i> Medical Consultation Recommended</h6>
+                    <p>Based on the severity of your symptoms (${overallSeverity}/10), immediate medical consultation is advised.</p>
                     <button class="btn btn-danger mt-2" onclick="scheduleDoctor()">
-                        <i class="fas fa-user-md"></i> Schedule Doctor Consultation
+                        <i class="fas fa-user-md"></i> Book Doctor Consultation
                     </button>
                 </div>
             `;
-        } else {
-            // Mild to moderate case - Medicine order or optional consultation
+        } else if (overallSeverity >= 1) {
+            // Mild to moderate case (1-5) - Both medicine order and consultation options
             recommendationOptions.innerHTML = `
-                <div class="alert alert-warning">
-                    <h6><i class="fas fa-pills"></i> Recommended Treatment Options</h6>
-                    <p>Based on your symptoms, you can:</p>
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle"></i> Treatment Options</h6>
+                    <p>Based on your symptoms (severity: ${overallSeverity}/10), you can:</p>
                     <div class="d-grid gap-2">
-                        <button class="btn btn-primary" onclick="orderMedicine()">
-                            <i class="fas fa-shopping-cart"></i> Order Recommended Medicines
+                        <button class="btn btn-success" onclick="orderMedicine()">
+                            <i class="fas fa-shopping-cart"></i> Order Medicines
                         </button>
-                        <button class="btn btn-outline-primary" onclick="scheduleDoctor()">
-                            <i class="fas fa-user-md"></i> Optional: Schedule Doctor Consultation
+                        <button class="btn btn-primary" onclick="scheduleDoctor()">
+                            <i class="fas fa-user-md"></i> Book Consultation
                         </button>
                     </div>
                 </div>
