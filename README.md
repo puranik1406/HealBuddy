@@ -6,6 +6,8 @@
 
 HealBuddy is a comprehensive full-stack healthcare platform that leverages AI to provide intelligent symptom analysis, voice interaction, appointment booking, and emergency management. Built with Flask and powered by Google's Gemini AI.
 
+Check out the deployed app [HealBuddy]-(https://healbuddy-74m1.onrender.com/)
+
 ## ✨ Key Features
 
 ### 🎤 Voice Interaction System
@@ -299,7 +301,6 @@ HealBuddy/
 - Review emergency details
 - Update case status
 - Track resolved cases
-- Coordinate with staff
 
 ## 🔧 Configuration
 
@@ -607,17 +608,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Family health management
 - Chronic disease monitoring
 
-## 📸 Screenshots
-
-*Add screenshots of:*
-- Landing page
-- Voice input interface
-- AI analysis results
-- Patient dashboard
-- Doctor dashboard
-- Appointment booking
-
----
 
 **Built with ❤️ to make healthcare more accessible and intelligent**
 
