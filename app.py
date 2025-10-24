@@ -1,6 +1,7 @@
 import os
 import json
 import base64
+import traceback
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
@@ -9,10 +10,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import google.generativeai as genai
 from dotenv import load_dotenv
-import tempfile
-import io
-from gtts import gTTS
 import speech_recognition as sr
+from gtts import gTTS
+from pydub import AudioSegment
+import io
 # Load environment variables
 load_dotenv()
 
@@ -60,6 +61,7 @@ class User(UserMixin, db.Model):
     # Common fields
     first_name = db.Column(db.String(50))
     last_name = db.Column(db.String(50))
+    gender = db.Column(db.String(20))
     date_of_birth = db.Column(db.Date)
     phone_number = db.Column(db.String(20))
     address = db.Column(db.Text)
@@ -140,95 +142,6 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # AI Integration Functions
-def transcribe_audio(audio_data):
-    """Transcribe audio using Google Speech Recognition"""
-    webm_path = None
-    wav_path = None
-    
-    try:
-        # Save audio data to temporary webm file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
-            temp_file.write(audio_data)
-            webm_path = temp_file.name
-        
-        print(f"WebM file saved: {webm_path}, size: {len(audio_data)} bytes")
-        
-        # Convert WebM to WAV using pydub
-        try:
-            from pydub import AudioSegment
-            
-            # Load webm audio
-            audio = AudioSegment.from_file(webm_path, format="webm")
-            
-            # Convert to WAV format (16kHz, mono, 16-bit) - optimal for speech recognition
-            audio = audio.set_frame_rate(16000).set_channels(1)
-            
-            # Save as WAV
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as wav_file:
-                wav_path = wav_file.name
-            
-            audio.export(wav_path, format="wav")
-            print(f"Converted to WAV: {wav_path}")
-            
-        except ImportError:
-            print("pydub not available, trying direct conversion")
-            # Fallback: Try using speech_recognition's built-in conversion
-            wav_path = webm_path
-        except Exception as e:
-            print(f"Error converting audio format: {e}")
-            # Try using the webm file directly
-            wav_path = webm_path
-        
-        # Initialize recognizer
-        recognizer = sr.Recognizer()
-        
-        # Adjust for ambient noise and energy threshold
-        recognizer.energy_threshold = 300
-        recognizer.dynamic_energy_threshold = True
-        
-        try:
-            # Load audio file
-            with sr.AudioFile(wav_path) as source:
-                # Adjust for ambient noise
-                recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                # Record the audio
-                audio_recorded = recognizer.record(source)
-            
-            print("Audio loaded successfully, attempting recognition...")
-            
-            # Use Google Speech Recognition (free)
-            transcript = recognizer.recognize_google(audio_recorded)
-            print(f"Transcription successful: {transcript}")
-            return transcript
-                
-        except sr.UnknownValueError:
-            print("Google Speech Recognition could not understand audio")
-            return "Could not understand the audio. Please speak clearly and try again."
-        except sr.RequestError as e:
-            print(f"Could not request results from Google Speech Recognition service; {e}")
-            return f"Speech recognition service error: {e}"
-        except Exception as e:
-            print(f"Error during recognition: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-    
-    except Exception as e:
-        print(f"Error in transcription: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-    
-    finally:
-        # Clean up temporary files
-        for path in [webm_path, wav_path]:
-            if path and os.path.exists(path):
-                try:
-                    os.unlink(path)
-                    print(f"Cleaned up: {path}")
-                except Exception as e:
-                    print(f"Error cleaning up {path}: {e}")
-
 def analyze_symptoms(symptoms_text, severity=None):
     """Analyze symptoms using Gemini AI"""
     try:
@@ -350,6 +263,124 @@ def analyze_symptoms(symptoms_text, severity=None):
             "red_flags": []
         }
 
+# Voice Processing Functions
+def transcribe_audio(audio_file_path):
+    """Transcribe audio file to text using Google Speech Recognition"""
+    try:
+        recognizer = sr.Recognizer()
+        
+        # Convert webm to wav if needed
+        if audio_file_path.endswith('.webm'):
+            audio = AudioSegment.from_file(audio_file_path, format="webm")
+            wav_path = audio_file_path.replace('.webm', '.wav')
+            audio.export(wav_path, format="wav")
+            audio_file_path = wav_path
+        
+        # Transcribe
+        with sr.AudioFile(audio_file_path) as source:
+            audio_data = recognizer.record(source)
+            text = recognizer.recognize_google(audio_data)
+            return text
+    except sr.UnknownValueError:
+        return "Could not understand audio"
+    except sr.RequestError as e:
+        print(f"Speech recognition error: {e}")
+        return "Error processing audio"
+    except Exception as e:
+        print(f"Transcription error: {e}")
+        traceback.print_exc()
+        return "Error transcribing audio"
+
+def generate_tts_audio(text):
+    """Generate text-to-speech audio and return base64 encoded MP3"""
+    try:
+        # Create TTS
+        tts = gTTS(text=text, lang='en', slow=False)
+        
+        # Save to bytes buffer
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_buffer.seek(0)
+        
+        # Encode to base64
+        audio_base64 = base64.b64encode(audio_buffer.read()).decode('utf-8')
+        return audio_base64
+    except Exception as e:
+        print(f"TTS error: {e}")
+        traceback.print_exc()
+        return None
+
+def generate_conversational_response(conversation_history):
+    """Generate AI response for ongoing conversation with follow-up questions"""
+    try:
+        # Build conversation context
+        conversation_context = "\n".join([
+            f"{msg['role'].upper()}: {msg['content']}" for msg in conversation_history
+        ])
+        
+        prompt = f"""
+You are a medical AI assistant having a conversation with a patient to gather symptom information.
+
+Conversation so far:
+{conversation_context}
+
+Based on the conversation, provide a response that:
+1. Acknowledges what the patient said
+2. Asks a relevant follow-up question to gather more information (about duration, severity, associated symptoms, triggers, etc.)
+3. Is empathetic and professional
+4. Keeps responses concise (2-3 sentences max)
+
+If you have gathered sufficient information about:
+- Main symptoms and their severity
+- Duration/onset
+- Associated symptoms
+- Any relevant medical history
+
+Then indicate you're ready for diagnosis by including "READY_FOR_DIAGNOSIS: true" at the end.
+
+Provide your response in this format:
+{{
+    "text": "Your conversational response here",
+    "ready_for_diagnosis": false
+}}
+"""
+        
+        response = model.generate_content(prompt)
+        response_text = response.text.strip()
+        
+        # Clean up JSON
+        if response_text.startswith('```json'):
+            response_text = response_text[7:]
+        if response_text.startswith('```'):
+            response_text = response_text[3:]
+        if response_text.endswith('```'):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        result = json.loads(response_text)
+        return result
+    except Exception as e:
+        print(f"Error generating conversational response: {e}")
+        traceback.print_exc()
+        return {
+            "text": "I understand. Can you tell me more about when these symptoms started?",
+            "ready_for_diagnosis": False
+        }
+
+def analyze_conversation_for_diagnosis(conversation_history):
+    """Analyze complete conversation to extract symptoms and generate diagnosis"""
+    try:
+        # Extract all patient messages
+        patient_messages = [msg['content'] for msg in conversation_history if msg['role'] == 'user']
+        combined_symptoms = " ".join(patient_messages)
+        
+        # Use existing analyze_symptoms function
+        return analyze_symptoms(combined_symptoms, severity=None)
+    except Exception as e:
+        print(f"Error analyzing conversation: {e}")
+        traceback.print_exc()
+        return None
+
 
 @app.route('/finalize_analysis', methods=['POST'])
 @login_required
@@ -410,18 +441,6 @@ def finalize_analysis():
         print(f"Error in finalize_analysis: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-def generate_tts_response(text):
-    """Generate text-to-speech audio using gTTS"""
-    try:
-        tts = gTTS(text=text, lang='en', slow=False)
-        audio_buffer = io.BytesIO()
-        tts.write_to_fp(audio_buffer)
-        audio_buffer.seek(0)
-        return audio_buffer.getvalue()
-    except Exception as e:
-        print(f"Error in TTS generation: {e}")
-        return None
-
 # Routes
 @app.route('/')
 def index():
@@ -464,6 +483,7 @@ def register():
         # Add user-type specific information
         if user_type == 'patient':
             # Patient-specific fields
+            user.gender = request.form.get('gender', '')
             user.date_of_birth = datetime.strptime(request.form.get('date_of_birth', '1990-01-01'), '%Y-%m-%d').date() if request.form.get('date_of_birth') else None
             user.height = float(request.form.get('height', 0)) if request.form.get('height') else None
             user.weight = float(request.form.get('weight', 0)) if request.form.get('weight') else None
@@ -543,10 +563,10 @@ def dashboard():
         consultations = Consultation.query.filter_by(patient_id=current_user.id).order_by(Consultation.created_at.desc()).limit(10).all()
         appointments = Appointment.query.filter_by(patient_id=current_user.id).order_by(Appointment.appointment_date.desc()).limit(5).all()
         
-        # Create a mapping of consultation_id to appointment for easy lookup
+        # Create a mapping of consultation_id to appointment for easy lookup (only non-completed)
         consultation_appointments = {}
         for appointment in Appointment.query.filter_by(patient_id=current_user.id).all():
-            if appointment.consultation_id:
+            if appointment.consultation_id and appointment.status != 'completed':
                 consultation_appointments[appointment.consultation_id] = appointment
         
         return render_template('patient_dashboard.html', 
@@ -555,11 +575,25 @@ def dashboard():
                              consultation_appointments=consultation_appointments,
                              get_severity=get_severity_classification)
     elif current_user.user_type == 'doctor':
-        # Get all consultations assigned to this doctor
-        consultations = Consultation.query.filter_by(doctor_id=current_user.id).order_by(Consultation.created_at.desc()).all()
-        
         # Get all appointments for this doctor
         all_appointments = Appointment.query.filter_by(doctor_id=current_user.id).order_by(Appointment.appointment_date).all()
+        
+        # Get all unique consultations linked to this doctor's appointments
+        consultation_ids = set()
+        for appt in all_appointments:
+            if appt.consultation_id:
+                consultation_ids.add(appt.consultation_id)
+        
+        # Fetch all consultations for this doctor (both through appointments and direct assignment)
+        consultations_from_appointments = Consultation.query.filter(Consultation.id.in_(consultation_ids)).all() if consultation_ids else []
+        consultations_direct = Consultation.query.filter_by(doctor_id=current_user.id).all()
+        
+        # Combine and deduplicate consultations
+        all_consultations_dict = {}
+        for c in consultations_from_appointments + consultations_direct:
+            all_consultations_dict[c.id] = c
+        consultations = list(all_consultations_dict.values())
+        consultations.sort(key=lambda x: x.created_at, reverse=True)
         
         # Filter out completed appointments and appointments with completed consultations
         appointments = []
@@ -578,13 +612,24 @@ def dashboard():
                     appointments.append(appt)
         
         # Calculate case counts
-        total_cases = len(consultations)
+        # Active cases: consultations assigned to this doctor that are not completed (pending or reviewed)
+        active_cases = len([c for c in consultations if c.status != 'completed'])
+        
+        # Completed cases: consultations this doctor has completed
         completed_cases = len([c for c in consultations if c.status == 'completed'])
+        
+        # Debug logging
+        print(f"Doctor {current_user.id} Dashboard:")
+        print(f"  Total consultations fetched: {len(consultations)}")
+        print(f"  Active cases: {active_cases}")
+        print(f"  Completed cases: {completed_cases}")
+        for c in consultations:
+            print(f"    Consultation {c.id}: status={c.status}, doctor_id={c.doctor_id}")
         
         return render_template('doctor_dashboard.html', 
                              consultations=consultations, 
                              appointments=appointments, 
-                             total_cases=total_cases,
+                             active_cases=active_cases,
                              completed_cases=completed_cases,
                              get_severity=get_severity_classification)
     elif current_user.user_type == 'hospital':
@@ -655,84 +700,6 @@ def symptom_input():
         flash('Access denied')
         return redirect(url_for('dashboard'))
     return render_template('symptom_input.html')
-
-@app.route('/upload_audio', methods=['POST'])
-@login_required
-def upload_audio():
-    if current_user.user_type != 'patient':
-        return jsonify({'error': 'Access denied'}), 403
-    
-    try:
-        # Check if audio file is present
-        if 'audio' not in request.files:
-            return jsonify({'error': 'No audio file provided'}), 400
-        
-        # Get audio data and severity from request
-        audio_file = request.files['audio']
-        audio_data = audio_file.read()
-        
-        if len(audio_data) == 0:
-            return jsonify({'error': 'Empty audio file received'}), 400
-        
-        severity = request.form.get('severity', type=int) or 5
-        
-        print(f"Received audio file, size: {len(audio_data)} bytes, severity: {severity}")
-        
-        # Transcribe audio
-        symptoms_text = transcribe_audio(audio_data)
-        
-        # Handle transcription failures gracefully
-        if not symptoms_text or "Could not understand" in symptoms_text or "error" in symptoms_text.lower():
-            error_message = symptoms_text if symptoms_text else "Failed to transcribe audio. Please try speaking more clearly."
-            return jsonify({
-                'error': error_message,
-                'transcription': symptoms_text,
-                'suggestion': 'Please try recording again and speak clearly, or use text input instead.'
-            }), 400
-        
-        print(f"Transcribed text: {symptoms_text}")
-        
-        # Analyze symptoms with severity - this returns initial analysis with follow-up questions
-        analysis = analyze_symptoms(symptoms_text, severity)
-        
-        if not analysis:
-            return jsonify({'error': 'Failed to analyze symptoms'}), 500
-        
-        print(f"Initial analysis completed successfully")
-        print(f"Follow-up questions: {len(analysis.get('follow_up_questions', []))}")
-        print(f"Identified symptoms: {analysis.get('identified_symptoms', [])}")
-        
-        # DON'T save consultation here - let the user answer follow-up questions first
-        # Consultation will be saved when user clicks "Update Analysis" (via /finalize_analysis)
-        
-        # Generate TTS response for the recommendations
-        tts_audio = None
-        try:
-            # Create a summary message for TTS
-            summary_parts = []
-            if analysis.get('diagnosis'):
-                summary_parts.append(analysis.get('diagnosis'))
-            if analysis.get('recommendations'):
-                summary_parts.append(analysis.get('recommendations'))
-            
-            tts_text = '. '.join(summary_parts) if summary_parts else 'Analysis complete. Please review the results.'
-            tts_audio = generate_tts_response(tts_text)
-        except Exception as tts_error:
-            print(f"TTS generation failed: {tts_error}")
-        
-        # Return transcription and initial analysis (with follow-up questions)
-        # Frontend will display this and allow user to adjust severities and answer questions
-        return jsonify({
-            'transcription': symptoms_text,
-            'analysis': analysis,
-            'tts_audio': base64.b64encode(tts_audio).decode('utf-8') if tts_audio else None
-        })
-    
-    except Exception as e:
-        print(f"Error in upload_audio: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 @app.route('/submit_symptoms', methods=['POST'])
 @login_required
@@ -971,16 +938,34 @@ def update_case_status():
         if not consultation:
             return jsonify({'error': 'Case not found'}), 404
         
+        old_status = consultation.status
         consultation.status = new_status
         if current_user.user_type == 'doctor':
             consultation.doctor_id = current_user.id
         
+        # Also update associated appointments if marking as completed
+        updated_appointments = []
+        if new_status == 'completed':
+            appointments = Appointment.query.filter_by(consultation_id=case_id).all()
+            for appt in appointments:
+                appt.status = 'completed'
+                updated_appointments.append(appt.id)
+        
         db.session.commit()
+        
+        # Debug logging
+        print(f"✅ Case status updated:")
+        print(f"  Consultation ID: {case_id}")
+        print(f"  Old status: {old_status}")
+        print(f"  New status: {new_status}")
+        print(f"  Doctor ID: {consultation.doctor_id}")
+        print(f"  Updated appointments: {updated_appointments}")
         
         return jsonify({'success': True, 'message': f'Case status updated to {new_status}'})
     
     except Exception as e:
         print(f"Error in update_case_status: {e}")
+        traceback.print_exc()
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/update_appointment_status', methods=['POST'])
@@ -1068,22 +1053,31 @@ def book_appointment():
     
     try:
         data = request.json
+        consultation_id = data.get('consultation_id')
+        
         appointment = Appointment(
             patient_id=current_user.id,
             doctor_id=data['doctor_id'],
-            consultation_id=data.get('consultation_id'),
+            consultation_id=consultation_id,
             appointment_type=data.get('appointment_type', 'online'),
             appointment_date=datetime.strptime(data['appointment_date'], '%Y-%m-%d'),
             appointment_slot=data['appointment_slot']
         )
         
         db.session.add(appointment)
+        
+        # Update consultation status to 'reviewed' if consultation_id is provided
+        if consultation_id:
+            consultation = Consultation.query.get(consultation_id)
+            if consultation and consultation.patient_id == current_user.id:
+                consultation.status = 'reviewed'
+                consultation.doctor_id = data['doctor_id']
+        
         db.session.commit()
         
         return jsonify({'success': True, 'message': 'Appointment booked successfully', 'appointment_id': appointment.id})
     except Exception as e:
         print(f"Error booking appointment: {e}")
-        import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
@@ -1250,7 +1244,10 @@ def schedule_consultation():
     if current_user.user_type != 'patient':
         flash('Access denied')
         return redirect(url_for('dashboard'))
-    return render_template('book_appointment.html')
+    
+    # Get consultation_id from query parameter if provided
+    consultation_id = request.args.get('consultation_id', type=int)
+    return render_template('book_appointment.html', consultation_id=consultation_id)
 
 @app.route('/order_medicine')
 @login_required
@@ -1260,6 +1257,128 @@ def order_medicine():
         flash('Access denied')
         return redirect(url_for('dashboard'))
     return render_template('order_medicine.html')
+
+# Voice Input Routes
+@app.route('/upload_audio', methods=['POST'])
+@login_required
+def upload_audio():
+    """Handle voice recording upload, transcribe, and generate AI response"""
+    if current_user.user_type != 'patient':
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+        
+        audio_file = request.files['audio']
+        
+        # Save audio file temporarily
+        audio_filename = secure_filename(f'voice_{current_user.id}_{datetime.utcnow().timestamp()}.webm')
+        audio_path = os.path.join(app.config['UPLOAD_FOLDER'], audio_filename)
+        audio_file.save(audio_path)
+        
+        # Transcribe audio
+        transcription = transcribe_audio(audio_path)
+        
+        # Get conversation history if provided
+        conversation_history_json = request.form.get('conversation_history')
+        conversation_history = []
+        if conversation_history_json:
+            conversation_history = json.loads(conversation_history_json)
+        
+        # Add user message to history
+        conversation_history.append({
+            'role': 'user',
+            'content': transcription
+        })
+        
+        # Generate AI conversational response
+        ai_response = generate_conversational_response(conversation_history)
+        
+        # Generate TTS audio for AI response
+        audio_base64 = generate_tts_audio(ai_response['text'])
+        
+        # Add AI response to history
+        conversation_history.append({
+            'role': 'ai',
+            'content': ai_response['text']
+        })
+        
+        # Clean up audio file
+        try:
+            os.remove(audio_path)
+            wav_path = audio_path.replace('.webm', '.wav')
+            if os.path.exists(wav_path):
+                os.remove(wav_path)
+        except:
+            pass
+        
+        return jsonify({
+            'transcription': transcription,
+            'ai_response': {
+                'text': ai_response['text'],
+                'audio': audio_base64,
+                'ready_for_diagnosis': ai_response.get('ready_for_diagnosis', False)
+            },
+            'conversation_history': conversation_history
+        })
+    
+    except Exception as e:
+        print(f"Error in upload_audio: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/finalize_voice_conversation', methods=['POST'])
+@login_required
+def finalize_voice_conversation():
+    """Finalize voice conversation and generate diagnosis"""
+    if current_user.user_type != 'patient':
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        data = request.json
+        conversation_history = data.get('conversation_history', [])
+        
+        if not conversation_history:
+            return jsonify({'error': 'No conversation history provided'}), 400
+        
+        # Analyze conversation for diagnosis
+        analysis = analyze_conversation_for_diagnosis(conversation_history)
+        
+        if not analysis:
+            return jsonify({'error': 'Failed to analyze conversation'}), 500
+        
+        # Extract symptoms text from conversation
+        patient_messages = [msg['content'] for msg in conversation_history if msg['role'] == 'user']
+        symptoms_text = " ".join(patient_messages)
+        
+        # Calculate overall severity from identified symptoms
+        overall_severity = 5
+        if analysis.get('default_severities'):
+            severities = analysis['default_severities']
+            overall_severity = sum(severities) // len(severities) if severities else 5
+        
+        # Save consultation to database
+        consultation = Consultation(
+            patient_id=current_user.id,
+            symptoms=symptoms_text,
+            duration=analysis.get('duration', 'unknown'),
+            pain_level=overall_severity,
+            ai_response=json.dumps(analysis),
+            is_emergency=(analysis.get('urgency', 'medium').lower() == 'high')
+        )
+        db.session.add(consultation)
+        db.session.commit()
+        
+        return jsonify({
+            'analysis': analysis,
+            'consultation_id': consultation.id
+        })
+    
+    except Exception as e:
+        print(f"Error in finalize_voice_conversation: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/update_patient_profile', methods=['POST'])
 @login_required

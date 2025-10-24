@@ -59,100 +59,6 @@
     </div>
 </div>
 
-<!-- Quick Voice Input Section -->
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card border-primary">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">
-                    <i class="fas fa-microphone"></i> Quick Voice Consultation
-                </h5>
-            </div>
-            <div class="card-body">
-                <div id="voiceInputSection">
-                    <p class="text-muted mb-3">Describe your symptoms using your voice for quick AI analysis</p>
-                    <div class="text-center">
-                        <button id="startRecordBtn" class="btn btn-lg btn-primary">
-                            <i class="fas fa-microphone"></i> Start Recording
-                        </button>
-                        <button id="stopRecordBtn" class="btn btn-lg btn-danger" style="display: none;">
-                            <i class="fas fa-stop"></i> Stop Recording
-                        </button>
-                        <button id="processingBtn" class="btn btn-lg btn-info" style="display: none;" disabled>
-                            <i class="fas fa-spinner fa-spin"></i> <span id="processingText">Transcribing Audio...</span>
-                        </button>
-                    </div>
-                    <div id="recordingIndicator" class="text-center mt-3" style="display: none;">
-                        <div class="text-danger">
-                            <i class="fas fa-circle fa-beat"></i> Recording... Speak clearly
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Transcription Display -->
-                <div id="transcriptionSection" class="mt-4" style="display: none;">
-                    <div class="alert alert-info">
-                        <h6><i class="fas fa-comment"></i> What you said:</h6>
-                        <p id="transcriptionText" class="mb-0"></p>
-                    </div>
-                </div>
-
-                <!-- AI Analysis Results -->
-                <div id="analysisSection" class="mt-4" style="display: none;">
-                    <!-- Diagnosis Summary -->
-                    <div id="diagnosisSummary" class="card border-primary mb-3">
-                        <div class="card-header bg-primary text-white">
-                            <h6 class="mb-0"><i class="fas fa-stethoscope"></i> AI Diagnosis Summary</h6>
-                        </div>
-                        <div class="card-body" id="diagnosisContent">
-                            <!-- Dynamically populated -->
-                        </div>
-                    </div>
-
-                    <!-- Symptom Severity Sliders -->
-                    <div id="severitySection" class="mb-3">
-                        <h6 class="text-primary"><i class="fas fa-sliders-h"></i> Adjust Symptom Severities:</h6>
-                        <p class="text-muted small">Fine-tune the severity for each symptom (1=mild, 10=severe)</p>
-                        <div id="severitySliders"></div>
-                    </div>
-
-                    <!-- Follow-up Questions -->
-                    <div id="followUpSection" style="display: none;" class="mb-3">
-                        <div class="card border-info">
-                            <div class="card-header bg-info text-white">
-                                <h6 class="mb-0"><i class="fas fa-question-circle"></i> Follow-up Questions</h6>
-                            </div>
-                            <div class="card-body">
-                                <p class="text-muted small mb-3">Please answer these to refine the diagnosis:</p>
-                                <div id="followUpQuestions"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Update Button -->
-                    <div class="text-center mb-3">
-                        <button id="updateAnalysisBtn" class="btn btn-success btn-lg">
-                            <i class="fas fa-sync"></i> Update Analysis
-                        </button>
-                    </div>
-
-                    <!-- Final Recommendations -->
-                    <div id="recommendationsSection" style="display: none;">
-                        <div class="card border-success">
-                            <div class="card-header bg-success text-white">
-                                <h6 class="mb-0"><i class="fas fa-check-circle"></i> Recommendations</h6>
-                            </div>
-                            <div class="card-body" id="recommendationsContent">
-                                <!-- Dynamically populated -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="row">
     <div class="col-md-8">
         <div class="card">
@@ -198,9 +104,17 @@
                                     </td>
                                     <td>
                                         {% if consultation.id in consultation_appointments %}
-                                            <span class="badge bg-success">
-                                                <i class="fas fa-calendar-check"></i> Appointment Booked
-                                            </span>
+                                            {% set appt = consultation_appointments[consultation.id] %}
+                                            <div class="d-flex flex-column gap-1">
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-calendar-check"></i> Appointment Booked
+                                                </span>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-user-md"></i> Dr. {{ appt.doctor.first_name }} {{ appt.doctor.last_name }}<br>
+                                                    <i class="fas fa-calendar"></i> {{ appt.appointment_date.strftime('%b %d, %Y') if appt.appointment_date else 'TBD' }}<br>
+                                                    <i class="fas fa-clock"></i> {{ appt.appointment_slot }}
+                                                </small>
+                                            </div>
                                         {% elif consultation.pain_level >= 9 %}
                                             <span class="badge bg-danger">
                                                 <i class="fas fa-ambulance"></i> Emergency Alert Sent
@@ -250,6 +164,11 @@
                 <div class="mb-3">
                     <strong>Email:</strong> {{ current_user.email }}
                 </div>
+                {% if current_user.gender %}
+                <div class="mb-3">
+                    <strong>Gender:</strong> {{ current_user.gender }}
+                </div>
+                {% endif %}
                 {% if current_user.blood_group %}
                 <div class="mb-3">
                     <strong>Blood Group:</strong> {{ current_user.blood_group }}
@@ -369,356 +288,6 @@
 {% block scripts %}
 <script>
 let currentConsultationId = null;
-let mediaRecorder = null;
-let audioStream = null;
-let isRecording = false;
-let currentAnalysisData = null;
-
-// Voice Recording Functionality
-document.addEventListener('DOMContentLoaded', function() {
-    const startRecordBtn = document.getElementById('startRecordBtn');
-    const stopRecordBtn = document.getElementById('stopRecordBtn');
-    const processingBtn = document.getElementById('processingBtn');
-    const recordingIndicator = document.getElementById('recordingIndicator');
-    const updateAnalysisBtn = document.getElementById('updateAnalysisBtn');
-
-    if (startRecordBtn) {
-        startRecordBtn.addEventListener('click', startDashboardRecording);
-    }
-    if (stopRecordBtn) {
-        stopRecordBtn.addEventListener('click', stopDashboardRecording);
-    }
-    if (updateAnalysisBtn) {
-        updateAnalysisBtn.addEventListener('click', finalizeDashboardAnalysis);
-    }
-});
-
-async function startDashboardRecording() {
-    try {
-        // Request microphone permission
-        audioStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                sampleRate: 16000
-            } 
-        });
-        
-        // Update UI
-        document.getElementById('startRecordBtn').style.display = 'none';
-        document.getElementById('stopRecordBtn').style.display = 'inline-block';
-        document.getElementById('recordingIndicator').style.display = 'block';
-        
-        // Start recording
-        mediaRecorder = new MediaRecorder(audioStream, {
-            mimeType: 'audio/webm;codecs=opus'
-        });
-        const audioChunks = [];
-        
-        mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                audioChunks.push(event.data);
-            }
-        };
-        
-        mediaRecorder.onstop = () => {
-            console.log('Recording stopped, processing audio...');
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            
-            if (audioBlob.size > 0) {
-                processDashboardAudio(audioBlob);
-            } else {
-                HealBuddy.showAlert('Recording failed - no audio data captured', 'danger');
-                resetDashboardRecording();
-            }
-            
-            // Stop all tracks
-            if (audioStream) {
-                audioStream.getTracks().forEach(track => track.stop());
-                audioStream = null;
-            }
-        };
-        
-        mediaRecorder.start();
-        isRecording = true;
-        console.log('Recording started');
-        
-        // Auto-stop after 30 seconds
-        setTimeout(() => {
-            if (isRecording) {
-                stopDashboardRecording();
-            }
-        }, 30000);
-        
-    } catch (error) {
-        console.error('Error starting recording:', error);
-        HealBuddy.showAlert('Could not access microphone. Please check permissions.', 'danger');
-        resetDashboardRecording();
-    }
-}
-
-function stopDashboardRecording() {
-    if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-        isRecording = false;
-        
-        // Show processing state
-        document.getElementById('stopRecordBtn').style.display = 'none';
-        document.getElementById('recordingIndicator').style.display = 'none';
-        document.getElementById('processingBtn').style.display = 'inline-block';
-        document.getElementById('processingText').textContent = 'Transcribing Audio...';
-    }
-}
-
-async function processDashboardAudio(audioBlob) {
-    try {
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
-        formData.append('severity', '5'); // Default severity
-
-        console.log('Uploading audio, size:', audioBlob.size);
-        
-        // Update processing text
-        document.getElementById('processingText').textContent = 'Transcribing Audio...';
-
-        const response = await fetch('/upload_audio', {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            console.log('Audio processed successfully');
-            
-            // Update processing text
-            document.getElementById('processingText').textContent = 'Analyzing Symptoms...';
-            
-            // Small delay to show the analyzing state
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Display results
-            displayDashboardResults(data);
-            HealBuddy.showAlert('✅ Voice input processed! Review the diagnosis below.', 'success');
-        } else {
-            throw new Error(data.error || 'Failed to process audio');
-        }
-
-    } catch (error) {
-        console.error('Error processing audio:', error);
-        HealBuddy.showAlert('Error: ' + error.message, 'danger');
-        resetDashboardRecording();
-    }
-}
-
-function displayDashboardResults(data) {
-    currentAnalysisData = data.analysis;
-    
-    // Hide processing button
-    document.getElementById('processingBtn').style.display = 'none';
-    
-    // Show transcription
-    if (data.transcription) {
-        document.getElementById('transcriptionText').textContent = data.transcription;
-        document.getElementById('transcriptionSection').style.display = 'block';
-    }
-    
-    // Show analysis section
-    document.getElementById('analysisSection').style.display = 'block';
-    
-    // Populate diagnosis summary
-    let diagnosisHTML = '';
-    if (currentAnalysisData.diagnosis) {
-        diagnosisHTML += `<div class="mb-3"><strong>Preliminary Analysis:</strong><p class="mt-2">${currentAnalysisData.diagnosis}</p></div>`;
-    }
-    if (currentAnalysisData.possible_conditions && currentAnalysisData.possible_conditions.length > 0) {
-        diagnosisHTML += '<div class="mb-3"><strong>Possible Conditions:</strong><ul class="mt-2">';
-        currentAnalysisData.possible_conditions.forEach(condition => {
-            diagnosisHTML += `<li>${condition}</li>`;
-        });
-        diagnosisHTML += '</ul></div>';
-    }
-    if (currentAnalysisData.red_flags && currentAnalysisData.red_flags.length > 0) {
-        diagnosisHTML += '<div class="alert alert-danger mb-0"><strong><i class="fas fa-exclamation-triangle"></i> Warning Signs:</strong><ul class="mt-2 mb-0">';
-        currentAnalysisData.red_flags.forEach(flag => {
-            diagnosisHTML += `<li>${flag}</li>`;
-        });
-        diagnosisHTML += '</ul></div>';
-    }
-    document.getElementById('diagnosisContent').innerHTML = diagnosisHTML;
-    
-    // Populate severity sliders
-    const severitySliders = document.getElementById('severitySliders');
-    severitySliders.innerHTML = '';
-    const symptoms = currentAnalysisData.identified_symptoms || [];
-    const severities = currentAnalysisData.default_severities || [];
-    
-    symptoms.forEach((symptom, index) => {
-        const severity = severities[index] || 5;
-        const sliderHTML = `
-            <div class="mb-3">
-                <label class="form-label">${symptom}:</label>
-                <div class="d-flex align-items-center">
-                    <input type="range" class="form-range flex-grow-1 symptom-slider" 
-                        data-symptom="${symptom}" min="1" max="10" value="${severity}">
-                    <span class="ms-2 badge bg-warning severity-value">${severity}</span>
-                </div>
-            </div>
-        `;
-        severitySliders.insertAdjacentHTML('beforeend', sliderHTML);
-    });
-    
-    // Add slider event listeners
-    document.querySelectorAll('.symptom-slider').forEach(slider => {
-        slider.addEventListener('input', function() {
-            const badge = this.nextElementSibling;
-            badge.textContent = this.value;
-            const severity = parseInt(this.value);
-            badge.className = `ms-2 badge ${getSeverityBadgeClass(severity)}`;
-        });
-    });
-    
-    // Populate follow-up questions
-    const followUps = currentAnalysisData.follow_up_questions || [];
-    if (followUps.length > 0) {
-        const followUpQuestions = document.getElementById('followUpQuestions');
-        followUpQuestions.innerHTML = '';
-        followUps.forEach((question, index) => {
-            const questionHTML = `
-                <div class="mb-3">
-                    <label class="form-label fw-bold">${index + 1}. ${question}</label>
-                    <input type="text" class="form-control follow-up-answer" 
-                        data-question="${question}" placeholder="Your answer...">
-                </div>
-            `;
-            followUpQuestions.insertAdjacentHTML('beforeend', questionHTML);
-        });
-        document.getElementById('followUpSection').style.display = 'block';
-    }
-    
-    // Scroll to analysis section
-    document.getElementById('analysisSection').scrollIntoView({ behavior: 'smooth' });
-}
-
-function getSeverityBadgeClass(level) {
-    if (level <= 3) return 'bg-success';
-    if (level <= 6) return 'bg-warning';
-    return 'bg-danger';
-}
-
-async function finalizeDashboardAnalysis() {
-    try {
-        // Collect symptom severities
-        const symptoms = [];
-        document.querySelectorAll('.symptom-slider').forEach(slider => {
-            symptoms.push({
-                symptom: slider.dataset.symptom,
-                severity: parseInt(slider.value)
-            });
-        });
-        
-        // Collect follow-up answers
-        const followUpAnswers = [];
-        document.querySelectorAll('.follow-up-answer').forEach(input => {
-            if (input.value.trim()) {
-                followUpAnswers.push({
-                    question: input.dataset.question,
-                    answer: input.value.trim()
-                });
-            }
-        });
-        
-        // Show loading state
-        const updateBtn = document.getElementById('updateAnalysisBtn');
-        updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Finalizing...';
-        updateBtn.disabled = true;
-        
-        // Send to server
-        const response = await fetch('/finalize_analysis', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                symptoms: symptoms,
-                follow_up_answers: followUpAnswers
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            // Display final recommendations
-            let recsHTML = '';
-            const final = data.analysis;
-            
-            if (final.recommendations) {
-                recsHTML += `<div class="mb-3"><strong>Recommendations:</strong><p class="mt-2">${final.recommendations}</p></div>`;
-            }
-            
-            // Calculate overall severity
-            const overallSeverity = symptoms.length > 0 
-                ? Math.ceil(symptoms.reduce((sum, s) => sum + s.severity, 0) / symptoms.length)
-                : 5;
-            
-            recsHTML += `<div class="mb-3"><strong>Overall Severity:</strong> <span class="badge ${getSeverityBadgeClass(overallSeverity)} fs-6">${overallSeverity}/10</span></div>`;
-            
-            // Action buttons based on severity
-            if (overallSeverity >= 6) {
-                recsHTML += `
-                    <div class="alert alert-warning">
-                        <strong><i class="fas fa-exclamation-circle"></i> Medical Consultation Recommended</strong>
-                        <p class="mb-2">Based on severity (${overallSeverity}/10), please consult a doctor.</p>
-                        <a href="/schedule_consultation" class="btn btn-danger">
-                            <i class="fas fa-user-md"></i> Book Doctor Consultation
-                        </a>
-                    </div>
-                `;
-            } else {
-                recsHTML += `
-                    <div class="d-grid gap-2">
-                        <a href="/order_medicine" class="btn btn-success">
-                            <i class="fas fa-pills"></i> Order Medicines
-                        </a>
-                        <a href="/schedule_consultation" class="btn btn-primary">
-                            <i class="fas fa-user-md"></i> Book Consultation (Optional)
-                        </a>
-                    </div>
-                `;
-            }
-            
-            document.getElementById('recommendationsContent').innerHTML = recsHTML;
-            document.getElementById('recommendationsSection').style.display = 'block';
-            
-            // Hide update button
-            updateBtn.style.display = 'none';
-            
-            HealBuddy.showAlert('✅ Final analysis complete! Consultation saved to your dashboard.', 'success');
-            
-            // Reload consultations after 2 seconds
-            setTimeout(() => {
-                location.reload();
-            }, 3000);
-        } else {
-            throw new Error(data.error || 'Failed to finalize analysis');
-        }
-        
-    } catch (error) {
-        console.error('Error finalizing analysis:', error);
-        HealBuddy.showAlert('Error: ' + error.message, 'danger');
-        
-        // Reset button
-        const updateBtn = document.getElementById('updateAnalysisBtn');
-        updateBtn.innerHTML = '<i class="fas fa-sync"></i> Update Analysis';
-        updateBtn.disabled = false;
-    }
-}
-
-function resetDashboardRecording() {
-    document.getElementById('startRecordBtn').style.display = 'inline-block';
-    document.getElementById('stopRecordBtn').style.display = 'none';
-    document.getElementById('processingBtn').style.display = 'none';
-    document.getElementById('recordingIndicator').style.display = 'none';
-    isRecording = false;
-}
 
 async function viewConsultation(consultationId) {
     try {
@@ -880,8 +449,8 @@ function getSeverityBadgeColor(painLevel) {
 }
 
 async function consultDoctor(consultationId) {
-    // Redirect to the new appointment booking page
-    window.location.href = '/schedule_consultation';
+    // Redirect to the new appointment booking page with consultation_id
+    window.location.href = `/schedule_consultation?consultation_id=${consultationId}`;
 }
 
 let selectedConsultationType = 'online';
@@ -910,14 +479,18 @@ async function selectDoctor(doctorId, doctorName) {
             
             const data = await response.json();
             if (response.ok) {
-                alert(`Appointment booked successfully with ${doctorName}!`);
+                HealBuddy.showAlert(`✅ Appointment booked successfully with ${doctorName}!`, 'success');
                 bootstrap.Modal.getInstance(document.getElementById('doctorModal')).hide();
+                // Reload page to show appointment status in the actions column
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
             } else {
-                alert('Error: ' + data.error);
+                HealBuddy.showAlert('Error: ' + data.error, 'danger');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Error booking appointment');
+            HealBuddy.showAlert('Error booking appointment', 'danger');
         }
     }
 }

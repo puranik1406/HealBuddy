@@ -14,20 +14,23 @@
     </div>
 </div>
 
+<!-- Case Statistics -->
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="card bg-primary text-white">
             <div class="card-body text-center">
-                <h4 class="card-title">{{ total_cases }}</h4>
-                <p class="card-text">Total Cases</p>
+                <h4 class="card-title mb-0">{{ active_cases }}</h4>
+                <p class="card-text mb-0">Active Cases</p>
+                <small class="text-white-50">Cases assigned to you</small>
             </div>
         </div>
     </div>
     <div class="col-md-6">
         <div class="card bg-success text-white">
             <div class="card-body text-center">
-                <h4 class="card-title">{{ completed_cases }}</h4>
-                <p class="card-text">Completed</p>
+                <h4 class="card-title mb-0">{{ completed_cases }}</h4>
+                <p class="card-text mb-0">Completed Cases</p>
+                <small class="text-white-50">Cases you've resolved</small>
             </div>
         </div>
     </div>

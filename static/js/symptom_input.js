@@ -1,36 +1,40 @@
 // Symptom Input Page JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
-    const recordBtn = document.getElementById('recordBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const recordingStatus = document.getElementById('recordingStatus');
     const submitTextBtn = document.getElementById('submitTextBtn');
     const symptomsText = document.getElementById('symptomsText');
     const resultsSection = document.getElementById('resultsSection');
     const emergencyBtn = document.getElementById('emergencyBtn');
-    const playAudioBtn = document.getElementById('playAudioBtn');
     const newConsultationBtn = document.getElementById('newConsultationBtn');
-    const audioPlayer = document.getElementById('audioPlayer');
     const severityRange = document.getElementById('severityRange');
     const severityValue = document.getElementById('severityValue');
     const updateSeverityBtn = document.getElementById('updateSeverityBtn');
     const detailedAnalysis = document.getElementById('detailedAnalysis');
     const symptomsSeverityContainer = document.getElementById('symptomsSeverityContainer');
 
+    // Voice Input Elements
+    const startRecordBtn = document.getElementById('startRecordBtn');
+    const stopRecordBtn = document.getElementById('stopRecordBtn');
+    const recordingStatus = document.getElementById('recordingStatus');
+    const transcriptionSection = document.getElementById('transcriptionSection');
+    const transcriptionText = document.getElementById('transcriptionText');
+    const conversationSection = document.getElementById('conversationSection');
+    const conversationMessages = document.getElementById('conversationMessages');
+    const continueConversationBtn = document.getElementById('continueConversationBtn');
+    const finishConversationBtn = document.getElementById('finishConversationBtn');
+    const aiAudioPlayer = document.getElementById('aiAudioPlayer');
+
+    // Voice Recording Variables
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let conversationHistory = [];
+    let isRecording = false;
+
     // Update severity value display
     severityRange.addEventListener('input', function() {
         severityValue.textContent = this.value;
         severityValue.className = 'ms-2 badge ' + getSeverityBadgeClass(parseInt(this.value));
     });
-
-    let isRecording = false;
-    let currentAudioData = null;
-    let mediaRecorder = null;
-    let audioStream = null;
-
-    // Voice Recording Functions
-    recordBtn.addEventListener('click', startRecording);
-    stopBtn.addEventListener('click', stopRecording);
     
     // Text Input Functions
     submitTextBtn.addEventListener('click', submitTextSymptoms);
@@ -45,156 +49,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Emergency Functions
     emergencyBtn.addEventListener('click', triggerEmergency);
     
-    // Audio Playback Functions
-    playAudioBtn.addEventListener('click', playAudioResponse);
+    // New Consultation
     newConsultationBtn.addEventListener('click', resetForm);
-
-    async function startRecording() {
-        try {
-            // Request microphone permission
-            audioStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    sampleRate: 16000
-                } 
-            });
-            
-            // Update UI
-            recordBtn.style.display = 'none';
-            stopBtn.style.display = 'inline-block';
-            recordingStatus.style.display = 'block';
-            
-            // Start recording
-            mediaRecorder = new MediaRecorder(audioStream, {
-                mimeType: 'audio/webm;codecs=opus'
-            });
-            const audioChunks = [];
-            
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunks.push(event.data);
-                }
-            };
-            
-            mediaRecorder.onstop = () => {
-                console.log('Recording stopped, processing audio...');
-                // Create blob from recorded chunks
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                console.log('Audio blob created, size:', audioBlob.size);
-                
-                if (audioBlob.size > 0) {
-                    processAudioRecording(audioBlob);
-                } else {
-                    console.error('Audio blob is empty');
-                    HealBuddy.showAlert('Recording failed - no audio data captured. Please try again.', 'danger');
-                    resetRecordingUI();
-                }
-                
-                // Stop all tracks
-                if (audioStream) {
-                    audioStream.getTracks().forEach(track => track.stop());
-                    audioStream = null;
-                }
-            };
-            
-            mediaRecorder.onerror = (event) => {
-                console.error('MediaRecorder error:', event.error);
-                HealBuddy.showAlert('Recording error: ' + event.error, 'danger');
-                resetRecordingUI();
-            };
-            
-            mediaRecorder.start();
-            isRecording = true;
-            console.log('Recording started');
-            
-            // Auto-stop after 30 seconds
-            setTimeout(() => {
-                if (isRecording) {
-                    console.log('Auto-stopping recording after 30 seconds');
-                    stopRecording();
-                }
-            }, 30000);
-            
-        } catch (error) {
-            console.error('Error starting recording:', error);
-            HealBuddy.showAlert('Could not access microphone. Please check permissions and ensure you are using HTTPS or localhost.', 'danger');
-            resetRecordingUI();
-        }
-    }
-
-    function stopRecording() {
-        console.log('stopRecording called, isRecording:', isRecording);
-        if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') {
-            // Stop the media recorder
-            mediaRecorder.stop();
-            isRecording = false;
-            console.log('MediaRecorder stopped');
-        }
-    }
-
-    function resetRecordingUI() {
-        recordBtn.style.display = 'inline-block';
-        stopBtn.style.display = 'none';
-        recordingStatus.style.display = 'none';
-    }
-
-    async function processAudioRecording(audioBlob) {
-        try {
-            // Show processing status
-            recordingStatus.innerHTML = `
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Processing...</span>
-                </div>
-                <p class="mt-2">Transcribing your audio...</p>
-            `;
-            recordingStatus.style.display = 'block';
-
-            // Create FormData for file upload
-            const formData = new FormData();
-            // Use a filename that matches the actual container/codec
-            formData.append('audio', audioBlob, 'recording.webm');
-            
-            // Add severity if available
-            const severity = document.getElementById('severityRange')?.value || '5';
-            formData.append('severity', severity);
-
-            console.log('Uploading audio for transcription, size:', audioBlob.size);
-
-            // Send to server
-            const response = await fetch('/upload_audio', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                console.log('Audio processed successfully');
-                displayResults(data);
-                // Success message is shown by displayResults function
-            } else {
-                // Handle transcription errors
-                console.error('Transcription error:', data.error);
-                let errorMsg = data.error || 'Failed to process audio';
-                if (data.suggestion) {
-                    errorMsg += ' ' + data.suggestion;
-                }
-                HealBuddy.showAlert(errorMsg, 'warning');
-                
-                // If transcription provided but incomplete, show it
-                if (data.transcription) {
-                    console.log('Partial transcription:', data.transcription);
-                }
-            }
-
-        } catch (error) {
-            console.error('Error processing audio:', error);
-            HealBuddy.showAlert('Error processing audio: ' + error.message + '. Please try text input instead.', 'danger');
-        } finally {
-            resetRecordingUI();
-        }
-    }
 
     async function submitTextSymptoms() {
         const symptoms = symptomsText.value.trim();
@@ -244,12 +100,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayResults(data) {
         const analysis = data.analysis;
         
-        // Show transcription if available (from voice input)
-        if (data.transcription) {
-            document.getElementById('transcriptionResult').style.display = 'block';
-            document.getElementById('transcriptionText').textContent = data.transcription;
-        }
-
         // Parse the AI response if it's a JSON string
         let aiResponse = analysis;
         if (typeof analysis.ai_response === 'string') {
@@ -388,12 +238,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update recommendations
         document.getElementById('recommendationsResult').textContent = analysis.recommendations || 'No specific recommendations available.';
 
-        // Show audio response if available
-        if (data.tts_audio) {
-            currentAudioData = data.tts_audio;
-            playAudioBtn.style.display = 'inline-block';
-        }
-
         // Show results section
         resultsSection.style.display = 'block';
         resultsSection.scrollIntoView({ behavior: 'smooth' });
@@ -431,45 +275,6 @@ document.addEventListener('DOMContentLoaded', function() {
             case 'high': return 'danger';
             default: return 'secondary';
         }
-    }
-
-    function playAudioResponse() {
-        if (currentAudioData) {
-            try {
-                // Convert base64 to blob
-                const audioBlob = base64ToBlob(currentAudioData, 'audio/mpeg');
-                const audioUrl = URL.createObjectURL(audioBlob);
-                
-                audioPlayer.src = audioUrl;
-                audioPlayer.play();
-                
-                // Update button state
-                playAudioBtn.innerHTML = '<i class="fas fa-volume-up"></i> Playing...';
-                playAudioBtn.disabled = true;
-                
-                audioPlayer.onended = () => {
-                    playAudioBtn.innerHTML = '<i class="fas fa-volume-up"></i> Play Audio Response';
-                    playAudioBtn.disabled = false;
-                    URL.revokeObjectURL(audioUrl);
-                };
-                
-            } catch (error) {
-                console.error('Error playing audio:', error);
-                HealBuddy.showAlert('Error playing audio response', 'danger');
-            }
-        }
-    }
-
-    function base64ToBlob(base64, mimeType) {
-        const byteCharacters = atob(base64);
-        const byteNumbers = new Array(byteCharacters.length);
-        
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        
-        const byteArray = new Uint8Array(byteNumbers);
-        return new Blob([byteArray], { type: mimeType });
     }
 
     function updateDetailedAnalysis(analysis) {
@@ -620,17 +425,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Hide results
         resultsSection.style.display = 'none';
-        document.getElementById('transcriptionResult').style.display = 'none';
-        playAudioBtn.style.display = 'none';
         detailedAnalysis.style.display = 'none';
         updateSeverityBtn.style.display = 'none';
         
         // Clear symptoms
         symptomsSeverityContainer.innerHTML = '';
-        
-        // Reset audio
-        currentAudioData = null;
-        audioPlayer.src = '';
         
         // Scroll to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -680,5 +479,223 @@ document.addEventListener('DOMContentLoaded', function() {
     submitTextBtn.addEventListener('click', function() {
         localStorage.removeItem('symptomsDraft');
     });
+
+    // ======================
+    // VOICE INPUT FUNCTIONS
+    // ======================
+
+    // Voice Recording Event Listeners
+    startRecordBtn.addEventListener('click', startRecording);
+    stopRecordBtn.addEventListener('click', stopRecording);
+    continueConversationBtn.addEventListener('click', continueConversation);
+    finishConversationBtn.addEventListener('click', finishConversation);
+
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                await processAudio(audioBlob);
+                
+                // Stop all tracks to release microphone
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+
+            // Update UI
+            startRecordBtn.style.display = 'none';
+            stopRecordBtn.style.display = 'inline-block';
+            recordingStatus.style.display = 'block';
+
+        } catch (error) {
+            console.error('Error accessing microphone:', error);
+            HealBuddy.showAlert('Error accessing microphone. Please grant permission.', 'danger');
+        }
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+            isRecording = false;
+
+            // Update UI
+            startRecordBtn.style.display = 'inline-block';
+            stopRecordBtn.style.display = 'none';
+            recordingStatus.style.display = 'none';
+        }
+    }
+
+    async function processAudio(audioBlob) {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        
+        // Add conversation history for context
+        if (conversationHistory.length > 0) {
+            formData.append('conversation_history', JSON.stringify(conversationHistory));
+        }
+
+        try {
+            // Show loading
+            HealBuddy.showAlert('Processing your voice input...', 'info');
+
+            const response = await fetch('/upload_audio', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Display transcription
+                transcriptionText.textContent = data.transcription;
+                transcriptionSection.style.display = 'block';
+
+                // Add user message to conversation
+                addMessageToConversation('user', data.transcription);
+                conversationHistory.push({
+                    role: 'user',
+                    content: data.transcription
+                });
+
+                // Add AI response to conversation
+                addMessageToConversation('ai', data.ai_response.text);
+                conversationHistory.push({
+                    role: 'ai',
+                    content: data.ai_response.text
+                });
+
+                // Show conversation section
+                conversationSection.style.display = 'block';
+
+                // Play AI audio response
+                if (data.ai_response.audio) {
+                    playAudioResponse(data.ai_response.audio);
+                }
+
+                // Check if conversation should continue or finish
+                if (data.ai_response.ready_for_diagnosis) {
+                    // Show finish button prominently
+                    finishConversationBtn.classList.add('btn-lg');
+                    HealBuddy.showAlert('AI has gathered enough information. Click "Finish & Get Diagnosis" to see results.', 'success');
+                } else {
+                    HealBuddy.showAlert('Continue the conversation or finish to get diagnosis.', 'info');
+                }
+
+            } else {
+                throw new Error(data.error || 'Failed to process audio');
+            }
+
+        } catch (error) {
+            console.error('Error processing audio:', error);
+            HealBuddy.showAlert('Error processing audio: ' + error.message, 'danger');
+        }
+    }
+
+    function addMessageToConversation(role, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `conversation-message ${role}`;
+        
+        const icon = role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+        const roleName = role === 'user' ? 'You' : 'AI Doctor';
+        
+        messageDiv.innerHTML = `
+            <div class="message-header">
+                ${icon} ${roleName}
+            </div>
+            <div class="message-content">${content}</div>
+        `;
+        
+        conversationMessages.appendChild(messageDiv);
+        conversationMessages.scrollTop = conversationMessages.scrollHeight;
+    }
+
+    function playAudioResponse(audioBase64) {
+        const audioBlob = base64ToBlob(audioBase64, 'audio/mp3');
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        aiAudioPlayer.src = audioUrl;
+        aiAudioPlayer.play();
+        
+        // Add visual feedback
+        conversationMessages.classList.add('audio-playing');
+        
+        aiAudioPlayer.onended = () => {
+            conversationMessages.classList.remove('audio-playing');
+            URL.revokeObjectURL(audioUrl);
+        };
+    }
+
+    function base64ToBlob(base64, contentType) {
+        const byteCharacters = atob(base64);
+        const byteArrays = [];
+        
+        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+            const slice = byteCharacters.slice(offset, offset + 512);
+            const byteNumbers = new Array(slice.length);
+            
+            for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+            }
+            
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+        }
+        
+        return new Blob(byteArrays, { type: contentType });
+    }
+
+    async function continueConversation() {
+        // Just start recording again
+        await startRecording();
+    }
+
+    async function finishConversation() {
+        try {
+            // Show loading
+            finishConversationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+            finishConversationBtn.disabled = true;
+
+            const response = await fetch('/finalize_voice_conversation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    conversation_history: conversationHistory
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Display results using existing function
+                displayResults(data);
+                
+                // Hide voice input section, show results
+                conversationSection.style.display = 'none';
+                transcriptionSection.style.display = 'none';
+                
+                HealBuddy.showAlert('Diagnosis complete! Review your results below.', 'success');
+            } else {
+                throw new Error(data.error || 'Failed to finalize conversation');
+            }
+
+        } catch (error) {
+            console.error('Error finalizing conversation:', error);
+            HealBuddy.showAlert('Error finalizing conversation: ' + error.message, 'danger');
+        } finally {
+            finishConversationBtn.innerHTML = '<i class="fas fa-check"></i> Finish & Get Diagnosis';
+            finishConversationBtn.disabled = false;
+        }
+    }
 });
 

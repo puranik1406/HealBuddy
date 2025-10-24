@@ -52,6 +52,11 @@
                 <h5 class="mb-0"><i class="fas fa-heartbeat"></i> Vital Information</h5>
             </div>
             <div class="card-body">
+                {% if patient.gender %}
+                <div class="mb-2">
+                    <strong>Gender:</strong> {{ patient.gender }}
+                </div>
+                {% endif %}
                 <div class="mb-2">
                     <strong>Height:</strong> {{ patient.height }} cm
                 </div>

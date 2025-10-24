@@ -36,6 +36,7 @@
                         </h5>
                         <form id="bookingForm">
                             <input type="hidden" id="selectedDoctorId" name="doctor_id">
+                            <input type="hidden" id="consultationId" name="consultation_id" value="{{ consultation_id if consultation_id else '' }}">
                             
                             <div class="mb-3">
                                 <label for="appointmentDate" class="form-label">
@@ -193,11 +194,13 @@
         const nextHour = (parseInt(hours) + 1).toString().padStart(2, '0');
         const appointmentSlot = `${appointmentTime}-${nextHour}:${minutes}`;
         
+        const consultationId = formData.get('consultation_id');
         const data = {
             doctor_id: parseInt(formData.get('doctor_id')),
             appointment_date: formData.get('appointment_date'),
             appointment_slot: appointmentSlot,
-            appointment_type: formData.get('consultation_type')
+            appointment_type: formData.get('consultation_type'),
+            consultation_id: consultationId ? parseInt(consultationId) : null
         };
 
         try {
